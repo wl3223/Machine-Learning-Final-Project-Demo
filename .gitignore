@@ -1,0 +1,16 @@
+# Environments (屏蔽虚拟环境库，太庞大了不应该上传)
+.venv
+venv/
+
+# Python Cache (屏蔽Python运行时的缓存临时代码)
+__pycache__/
+*.pyc
+
+# Data (屏蔽几十上百兆的数据文件，GitHub不允许上传大于100MB的单文件)
+data/
+*.csv
+*.parquet
+*.npy
+
+# macOS (屏蔽苹果系统自动生成的隐藏垃圾文件)
+.DS_Store
