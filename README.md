@@ -29,9 +29,35 @@ A Streamlit web application to discover Steam games through natural text search,
    source .venv/bin/activate
    uv pip install -r requirements.txt
    ```
+   On Windows (PowerShell):
+   ```powershell
+   uv venv
+   .\.venv\Scripts\Activate.ps1
+   $env:UV_LINK_MODE = "copy"
+   uv pip install -r requirements.txt
+   ```
+
+   On Windows (Git Bash):
+   ```bash
+   uv venv
+   source .venv/Scripts/activate
+   export UV_LINK_MODE=copy
+   uv pip install -r requirements.txt
+   ```
+
+   If `uv pip` still fails due to OneDrive hardlink restrictions, install with the venv python directly:
+   ```powershell
+   .\.venv\Scripts\python.exe -m ensurepip --upgrade
+   .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+   ```
 3. Run the Streamlit application using the virtual environment's python directly or while activated:
    ```bash
    ./.venv/bin/python -m streamlit run app.py
+   ```
+
+   On Windows:
+   ```powershell
+   .\.venv\Scripts\python.exe -m streamlit run app.py
    ```
 
 Note: On the first launch, the application will automatically download the dataset `FronkonGames/steam-games-dataset` from Hugging Face and generate vector embeddings. Please allow a few minutes for this initialization process.

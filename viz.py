@@ -9,8 +9,15 @@ def perform_pca_projection(_dataset_vectors):
     Reduces dataset dense vectors to 2D using PCA for visualization.
     Uses an underscore on the vectors variable to avoid Streamlit full hashing.
     """
-    pca = PCA(n_components=2)
+    pca = PCA(n_components=2, svd_solver='full')
     projection = pca.fit_transform(_dataset_vectors)
+
+    # Fix PCA sign indeterminacy for stable plotting orientation across runs.
+    for i in range(pca.components_.shape[0]):
+        if pca.components_[i, 0] < 0:
+            pca.components_[i, :] *= -1
+            projection[:, i] *= -1
+
     return projection
 
 def plot_2d_map(df, projection, color_col='genres_primary'):
