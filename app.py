@@ -10,9 +10,13 @@ from embed import load_embedding_model, combine_text_fields, generate_embeddings
 from retrieval import rank_games_for_query, get_similar_games, batch_cosine_similarity
 from viz import perform_pca_projection, plot_2d_map, plot_price_distribution, plot_top_genres
 from clustering import perform_kmeans_clustering
+from utils import set_reproducibility
 
 # Constants
 MVP_DATA_LIMIT = 5000
+RANDOM_SEED = 42
+
+set_reproducibility(RANDOM_SEED)
 
 st.set_page_config(page_title="Steam Game Discovery Explorer", layout="wide")
 
@@ -98,7 +102,7 @@ with st.spinner("Initializing Vector Space & Clusters..."):
     dataset_vectors = get_cached_embeddings(combined_texts)
     # Phase 5 & 6 Math Prep
     pca_projection = perform_pca_projection(dataset_vectors)
-    clusters = perform_kmeans_clustering(dataset_vectors, n_clusters=8)
+    clusters = perform_kmeans_clustering(dataset_vectors, n_clusters=8, seed=RANDOM_SEED)
     
     # Attach to a working df
     df = df_raw.copy()
