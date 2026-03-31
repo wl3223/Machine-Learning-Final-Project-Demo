@@ -1,4 +1,4 @@
-# Steam Game Discovery Explorer
+# A Semantic Vector-Based Approach to Steam Game Discovery
 
 A Streamlit web application to discover Steam games through natural text search, dealbreakers, and vector similarity mapping. This application utilizes a from-scratch cosine similarity retrieval algorithm to match plain-English queries with games embedded using Sentence-Transformers.
 
