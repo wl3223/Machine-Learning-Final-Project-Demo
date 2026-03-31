@@ -55,7 +55,7 @@ A Streamlit web application to discover Steam games through natural text search,
    ./.venv/bin/python -m streamlit run app.py
    ```
 
-   On Windows:
+   On Windows/Git Bash:
    ```powershell
    .\.venv\Scripts\python.exe -m streamlit run app.py
    ```
