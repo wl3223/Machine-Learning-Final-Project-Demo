@@ -109,6 +109,54 @@ def validate_dataset(df):
             print(f"❌ Error: Required column '{col}' not found")
     
     return report
+
+def load_and_clean_data(limit=10000, max_retries=3):
+    """
+    Downloads, loads, and cleans the Steam games dataset with error handling.
+    """
+    import time
+    
+    for attempt in range(max_retries):
+        try:
+            st.info(f"Attempt {attempt + 1}: Downloading dataset from HuggingFace...")
+            ds = load_dataset("FronkonGames/steam-games-dataset", split="train")
+            df = ds.to_pandas()
+            st.success("✅ Dataset loaded successfully")
+            break
+        except Exception as e:
+            if attempt < max_retries - 1:
+                st.warning(f"Download failed: {str(e)}. Retrying in 5 seconds...")
+                time.sleep(5)
+            else:
+                st.error(f"❌ Failed to load dataset after {max_retries} attempts: {str(e)}")
+                raise
+    
+    # Validate dataset
+    validation_report = validate_dataset(df)
+    st.write(validation_report)  # Show in UI
+    
+    # ... rest of cleaning logic
+
+def add_derived_metadata(df):
+    """
+    Computes and adds derived metadata fields for richer filtering/analysis.
+    """
+    # Is free?
+    df['is_free'] = df['price'] == 0.0
+    
+    # Release year (already in code, but make it robust)
+    df['release_year'] = pd.to_datetime(df['release_date'], errors='coerce').dt.year.fillna(0).astype(int)
+    
+    # Review sentiment (positive/negative ratio)
+    df['positive_numeric'] = pd.to_numeric(df['positive'], errors='coerce').fillna(0)
+    df['negative_numeric'] = pd.to_numeric(df['negative'], errors='coerce').fillna(0)
+    df['sentiment_ratio'] = df['positive_numeric'] / (df['positive_numeric'] + df['negative_numeric'] + 1)
+    
+    # Price category
+    df['price_category'] = pd.cut(df['price'], bins=[-0.1, 0, 15, 30, 60, 999], 
+                                   labels=['Free', 'Budget', 'Standard', 'Premium', 'Luxury'])
+    
+    return df
     
 def get_text_fields(df):
     """Returns just the text fields needed for search/embedding."""
