@@ -8,6 +8,7 @@ from sklearn.neighbors import NearestNeighbors
 from data import load_and_clean_data
 from embed import load_embedding_model, combine_text_fields, generate_embeddings
 from retrieval import rank_games_for_query, get_similar_games, batch_cosine_similarity
+from utils import set_reproducibility
 from viz import perform_pca_projection, plot_2d_map, plot_price_distribution, plot_top_genres
 from clustering import perform_kmeans_clustering
 

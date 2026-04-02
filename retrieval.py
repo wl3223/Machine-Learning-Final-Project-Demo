@@ -2,7 +2,8 @@ import numpy as np
 
 def normalize_vectors(vectors):
     """
-    Normalizes a 2D matrix of vectors (or a single 1D vector) to have length 1 (L2 norm).
+    Normalizes a 2D matrix of vectors (or a single 1D vector) to have length 1 (L2 norm). 
+    Aims to eliminate bias towards longer descriptons
     Math: v_norm = v / ||v||
     """
     if vectors.ndim == 1:
@@ -19,6 +20,7 @@ def normalize_vectors(vectors):
 def cosine_similarity(vec_a, vec_b):
     """
     Computes the cosine similarity between two vectors.
+    Used specfically to calculate similarity between a user query and game vectors, or between two game vectors.
     Math: (A dot B) / (||A|| * ||B||)
     """
     a_norm = normalize_vectors(vec_a)
