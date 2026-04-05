@@ -3,6 +3,7 @@ import time
 import pandas as pd
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
+from input_handler import InputValidator
 
 # Import local modules
 from data import load_and_clean_data
@@ -142,26 +143,54 @@ st.sidebar.text(f"Showing {len(filtered_df)} games out of {len(df)}")
 # UI Tabs
 tab1, tab2, tab3 = st.tabs(["🔍 Semantic Search", "😲 Surprise Me (Cross-Genre)", "📈 Data & Visuals"])
 
+# TAB 1: SEMANTIC SEARCH
 with tab1:
     st.header("Search for Games")
+    
+    # Show example queries
+    with st.expander("📝 Need ideas? See example queries:"):
+        for example in InputValidator.suggest_query_examples():
+            st.write(f"• {example}")
+    
     col1, col2 = st.columns(2)
     with col1:
-        query = st.text_area("Describe the game you want to play:", "A relaxing farming simulator")
+        query = st.text_area(
+            "Describe the game you want to play:",
+            "A relaxing farming simulator",
+            help="Be specific! Mention genre, tone, features, or setting."
+        )
     with col2:
-        dealbreakers = st.text_area("Dealbreakers (what you DON'T want):", "microtransactions, stress")
-        
+        dealbreakers = st.text_area(
+            "Dealbreakers (what you DON'T want):",
+            "microtransactions, stress",
+            help="Leave empty if nothing to avoid."
+        )
+    
     c_left, c_right = st.columns(2)
     with c_left:
         algo = st.radio("Retrieval Algorithm", ["From-Scratch (Custom Math)", "Scikit-Learn (NearestNeighbors)"])
     with c_right:
         sort_by = st.selectbox("Sort Matches By:", ["Match Score (Default)", "Total Positive Reviews", "Estimated Owners", "Price (Low to High)"])
     
-    if st.button("Search"):
-        if query and len(filtered_df) > 0:
+    if st.button("Search", key="search_button"):
+        # VALIDATE INPUT ONLY AFTER BUTTON CLICK
+        is_valid, cleaned_query, suggestion = InputValidator.validate_query(query)
+        
+        # SHOW SUGGESTION ONLY AFTER BUTTON CLICK
+        if suggestion:
+            st.info(suggestion)
+        
+        # VALIDATION CHECK
+        if not is_valid:
+            st.error(f"❌ Invalid query: {suggestion}")
+        elif not cleaned_query:
+            st.error("Please enter a search query.")
+        elif len(filtered_df) == 0:
+            st.warning("No games match your sidebar filters. Try adjusting them.")
+        else:
+            # PROCEED WITH SEARCH
             start_time = time.time()
             
-            # Since vectors array length is tied to full df index, we must run math on all, then filter
-            # Or run math on the subset. Running math on subset:
             filtered_indices = filtered_df.index.tolist()
             subset_vectors = dataset_vectors[filtered_indices]
             
@@ -169,11 +198,11 @@ with tab1:
             FETCH_K = 20
             
             if algo == "From-Scratch (Custom Math)":
-                results = rank_games_for_query(query, dealbreakers, model, subset_vectors, filtered_df, top_k=FETCH_K, alpha=0.5)
+                results = rank_games_for_query(cleaned_query, dealbreakers, model, subset_vectors, filtered_df, top_k=FETCH_K, alpha=0.5)
                 latency = time.time() - start_time
-                st.success(f"Custom Algorithm Latency: {latency:.4f} seconds")
+                st.success(f"✅ Custom Algorithm Latency: {latency:.4f} seconds | Found {len(results)} matches")
             else:
-                q_vec = model.encode([query], convert_to_numpy=True)[0]
+                q_vec = model.encode([cleaned_query], convert_to_numpy=True)[0]
                 if dealbreakers:
                     n_vec = model.encode([dealbreakers], convert_to_numpy=True)[0]
                     q_vec = q_vec - (0.5 * n_vec)
@@ -186,60 +215,91 @@ with tab1:
                 results = filtered_df.iloc[indices[0]].copy()
                 results['similarity_score'] = 1 - distances[0]
                 latency = time.time() - start_time
-                st.success(f"Scikit-Learn Latency: {latency:.4f} seconds")
-                
-            # Apply chosen sorting
-            if sort_by == "Total Positive Reviews":
-                results['pos_num'] = pd.to_numeric(results['positive'], errors='coerce').fillna(0)
-                results = results.sort_values(by='pos_num', ascending=False)
-            elif sort_by == "Estimated Owners":
-                # 'estimated_owners' is usually text like "1000000 - 2000000". Extract the first number as float.
-                results['owners_min'] = results['estimated_owners'].astype(str).str.extract(r'(\d+)').astype(float).fillna(0)
-                results = results.sort_values(by='owners_min', ascending=False)
-            elif sort_by == "Price (Low to High)":
-                results = results.sort_values(by='price', ascending=True)
-            else:
-                # Default Match Score
-                results = results.sort_values(by='similarity_score', ascending=False)
-                
-            st.divider()
+                st.success(f"✅ Scikit-Learn Latency: {latency:.4f} seconds | Found {len(results)} matches")
             
-            for idx, row in results.iterrows():
-                with st.container():
-                    c1, c2 = st.columns([1, 4])
-                    score = row['similarity_score']
-                    if 'header_image' in row and row['header_image']:
-                        try:
-                            c1.image(row['header_image'])
-                        except:
-                            c1.write("🖼️")
-                    
-                    c2.subheader(f"{row['name']} `(Match: {score:.2f})`")
-                    c2.markdown(f"**Genres:** {row['genres']} | **Price:** ${row['price']} | **Cluster:** {row['Cluster']}")
-                    c2.write(row['short_description'])
-                    
-                    with c2.expander("Find Similar Games"):
-                        original_idx = df.index.get_loc(idx)
-                        similar_df = get_similar_games(original_idx, dataset_vectors, df, top_k=5)
-                        st.write(f"Games like {row['name']} (across entire dataset):")
-                        for _, sim_row in similar_df.iterrows():
-                            st.write(f"- **{sim_row['name']}** (Score: {sim_row['similarity_score']:.2f})")
-                st.write("---")
-        elif len(filtered_df) == 0:
-            st.warning("No games match your sidebar filters.")
+            # DISPLAY RESULTS WITH FEEDBACK
+            if len(results) == 0:
+                st.warning("No games found matching your criteria. Try modifying your search or filters.")
+                st.info("💡 Suggestion: Use broader terms or adjust the sidebar filters.")
+            else:
+                # Apply chosen sorting
+                if sort_by == "Total Positive Reviews":
+                    results['pos_num'] = pd.to_numeric(results['positive'], errors='coerce').fillna(0)
+                    results = results.sort_values(by='pos_num', ascending=False)
+                elif sort_by == "Estimated Owners":
+                    # 'estimated_owners' is usually text like "1000000 - 2000000". Extract the first number as float.
+                    results['owners_min'] = results['estimated_owners'].astype(str).str.extract(r'(\d+)').astype(float).fillna(0)
+                    results = results.sort_values(by='owners_min', ascending=False)
+                elif sort_by == "Price (Low to High)":
+                    results = results.sort_values(by='price', ascending=True)
+                else:
+                    # Default Match Score
+                    results = results.sort_values(by='similarity_score', ascending=False)
+                
+                st.divider()
+                
+                # Display results
+                for idx, row in results.iterrows():
+                    with st.container():
+                        c1, c2 = st.columns([1, 4])
+                        score = row['similarity_score']
+                        if 'header_image' in row and row['header_image']:
+                            try:
+                                c1.image(row['header_image'])
+                            except:
+                                c1.write("🖼️")
+                        
+                        c2.subheader(f"{row['name']} `(Match: {score:.2f})`")
+                        c2.markdown(f"**Genres:** {row['genres']} | **Price:** ${row['price']} | **Cluster:** {row['Cluster']}")
+                        c2.write(row['short_description'])
+                        
+                        with c2.expander("Find Similar Games"):
+                            original_idx = df.index.get_loc(idx)
+                            similar_df = get_similar_games(original_idx, dataset_vectors, df, top_k=5)
+                            st.write(f"Games like {row['name']} (across entire dataset):")
+                            for _, sim_row in similar_df.iterrows():
+                                st.write(f"- **{sim_row['name']}** (Score: {sim_row['similarity_score']:.2f})")
+                    st.write("---")
 
+# TAB 2: SURPRISE ME (CROSS-GENRE)
 with tab2:
     st.header("Surprise Me (Cross-Genre Explorer)")
+    st.markdown("Combine two wildly different concepts to find games living in the midpoint!")
+    
     col1, col2 = st.columns(2)
     with col1:
-        concept1 = st.text_input("Concept 1:", "Violent first person shooter")
+        concept1 = st.text_input(
+            "Concept 1:",
+            "Violent first person shooter",
+            help="Example: Fast-paced action, puzzle game, etc."
+        )
     with col2:
-        concept2 = st.text_input("Concept 2:", "Cute animal crossing")
+        concept2 = st.text_input(
+            "Concept 2:",
+            "Cute animal crossing",
+            help="Example: Relaxing game, horror, etc."
+        )
+    
+    if st.button("Find Midpoint Games", key="midpoint_button"):
+        # VALIDATE BOTH CONCEPTS ONLY AFTER BUTTON CLICK
+        is_valid1, clean1, sugg1 = InputValidator.validate_query(concept1)
+        is_valid2, clean2, sugg2 = InputValidator.validate_query(concept2)
         
-    if st.button("Find Midpoint Games"):
-        if concept1 and concept2 and len(filtered_df) > 0:
-            v1 = model.encode([concept1], convert_to_numpy=True)[0]
-            v2 = model.encode([concept2], convert_to_numpy=True)[0]
+        # SHOW VALIDATION FEEDBACK ONLY AFTER BUTTON CLICK
+        if sugg1:
+            st.info(f"**Concept 1**: {sugg1}")
+        if sugg2:
+            st.info(f"**Concept 2**: {sugg2}")
+        
+        # CHECK VALIDITY BEFORE PROCEEDING
+        if not is_valid1 or not is_valid2:
+            st.error("❌ Both concepts must be valid. Please refine them.")
+        elif len(filtered_df) == 0:
+            st.warning("No games match your sidebar filters.")
+        else:
+            # PROCEED WITH SEARCH (using cleaned, validated input)
+            v1 = model.encode([clean1], convert_to_numpy=True)[0]
+            v2 = model.encode([clean2], convert_to_numpy=True)[0]
             midpoint = (v1 + v2) / 2
             
             filtered_indices = filtered_df.index.tolist()
@@ -247,6 +307,9 @@ with tab2:
             
             similarities = batch_cosine_similarity(midpoint, subset_vectors)
             top_indices = np.argsort(similarities)[::-1][:10]
+            
+            st.success(f"✅ Found {len(top_indices)} games bridging '{clean1}' and '{clean2}'")
+            st.divider()
             
             for index_in_subset in top_indices:
                 row = filtered_df.iloc[index_in_subset]
@@ -265,6 +328,7 @@ with tab2:
                     c2.write(row['short_description'])
                 st.write("---")
 
+# TAB 3: DATA & VISUALS
 with tab3:
     st.header("Visual Data Exploration")
     
