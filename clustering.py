@@ -1,5 +1,6 @@
 import numpy as np
 import streamlit as st
+from sklearn.metrics import silhouette_score
 
 
 def _kmeans_plus_plus_init(data, n_clusters, rng):
@@ -22,6 +23,7 @@ def _kmeans_plus_plus_init(data, n_clusters, rng):
             continue
 
         probs = closest_dist_sq / total_dist
+        probs = probs / probs.sum() # Ensure probabilities sum to strictly 1.0
         next_idx = int(rng.choice(n_samples, p=probs))
         centers[center_idx] = data[next_idx]
 
@@ -103,3 +105,91 @@ def perform_kmeans_clustering(_dataset_vectors, n_clusters=8, seed=42, max_iter=
     labels = _assign_labels(data, centers)
     return _canonicalize_cluster_labels(labels, centers)
 
+def compute_clustering_metrics(data, labels, n_samples=3000):
+    """
+    Computes clustering evaluation metrics.
+    Inertia is calculated from scratch.
+    Silhouette Score uses sklearn (with sampling to ensure fast front-end rendering).
+    """
+    data = np.asarray(data, dtype=np.float32)
+    
+    # 1. From-scratch Inertia (Within-cluster sum of squares)
+    unique_labels = np.unique(labels)
+    centers = np.array([data[labels == l].mean(axis=0) for l in unique_labels])
+    
+    labels_mapped = np.searchsorted(unique_labels, labels)
+    
+    # Same vectorization technique used for distance calculation
+    data_sq = np.sum(data ** 2, axis=1, keepdims=True)
+    centers_sq = np.sum(centers ** 2, axis=1)
+    distances = data_sq + centers_sq - 2 * (data @ centers.T)
+    
+    # Get the minimum squared distance for each point to its assigned cluster
+    min_distances_sq = distances[np.arange(len(data)), labels_mapped]
+    inertia = np.sum(min_distances_sq)
+    
+    # 2. Silhouette Score
+    if len(unique_labels) > 1:
+        # Sample points if dataset is too large to maintain fast UI performance
+        sample_size = min(len(data), n_samples)
+        sil_score = silhouette_score(data, labels, sample_size=sample_size, random_state=42)
+    else:
+        sil_score = -1.0 # Invalid configuration
+        
+    return inertia, sil_score
+
+def get_cluster_profiles(df, cluster_col='Cluster', n_top=3):
+    """
+    Extracts the top n genres, categories, and numeric stats for each cluster 
+    to create a rich mathematical profile.
+    Returns a dictionary mapping cluster names to a formatted string.
+    """
+    profiles = {}
+    
+    # Precompute global tag counts to calculate inverse frequency (TF-IDF style)
+    df['combined_terms'] = df['genres'] + "," + df['tags']
+    all_terms = df['combined_terms'].str.split(',').explode().str.strip()
+    all_terms = all_terms[(all_terms != '') & (all_terms.str.lower() != 'nan')]
+    global_counts = all_terms.value_counts()
+
+    for cluster_name in sorted(df[cluster_col].unique()):
+        cluster_df = df[df[cluster_col] == cluster_name]
+        
+        # 1. Top Tags/Genres using Mathematical Term Frequency Importance
+        c_terms = cluster_df['combined_terms'].str.split(',').explode().str.strip()
+        c_terms = c_terms[(c_terms != '') & (c_terms.str.lower() != 'nan')]
+        c_counts = c_terms.value_counts()
+        
+        # Calculate score: Frequency in Cluster / sqrt(Global Frequency)
+        # This naturally suppresses generic tags (Indie, Strategy) and boosts unique cluster signatures
+        scores = {}
+        for tag, count in c_counts.items():
+            if count >= 2: # Min threshold to avoid ultra-rare outliers
+                scores[tag] = count / (global_counts[tag] ** 0.6) # 0.6 smoothing factor
+                
+        top_user_tags = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:n_top]
+        top_genres = [k for k, v in top_user_tags]
+        if not top_genres:
+             top_genres = ['General / Mixed']
+        
+        # 2. Top Categories (Filter generic noise like Single-player/Family Sharing)
+        cats = cluster_df['categories'].str.split(',').explode().str.strip()
+        cats = cats[cats != '']
+        meaningful_cats = cats[~cats.isin({'Single-player', 'Family Sharing', 'Steam Achievements', 'Steam Cloud', 'Profile Features Limited'})]
+        if len(meaningful_cats.unique()) >= 2:
+            top_cats = meaningful_cats.value_counts().nlargest(2).index.tolist()
+        else:
+            top_cats = cats.value_counts().nlargest(2).index.tolist()
+        
+        # 3. Numeric averages
+        avg_price = cluster_df['price'].mean()
+        
+        # Format richer string
+        genres_str = ", ".join(top_genres)
+        cats_str = ", ".join(top_cats)
+        
+        profiles[cluster_name] = f"🎮 {genres_str}  🏷️ {cats_str}  💰 ${avg_price:.2f}"
+        
+    # Clean up temporary column
+    df.drop(columns=['combined_terms'], inplace=True, errors='ignore')
+    return profiles
