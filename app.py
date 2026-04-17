@@ -451,7 +451,7 @@ with tab4:
             # 2. Retrieval Evaluation
             st.divider()
             st.subheader("2. Semantic Retrieval Validation (Known-Item Search)")
-            st.write("We randomly sample 100 actual games from the dataset and use their `short_description` as search queries. We then check if the algorithm successfully ranks the exact original game at the top of the results.")
+            st.write("We randomly sample 100 actual games from the dataset and use their `detailed_description` as search queries. This keeps validation separate from the embedding inputs, then checks whether the algorithm ranks the exact original game at the top of the results.")
             
             # Use the global df and vectors so we have full representation
             start_r = time.time()

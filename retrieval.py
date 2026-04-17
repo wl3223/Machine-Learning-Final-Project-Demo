@@ -94,19 +94,31 @@ def get_similar_games(target_idx, dataset_vectors, df, top_k=5):
     
     return results
 
-def evaluate_retrieval_mrr(model, dataset_vectors, df, sample_size=50, top_k=5):
+def evaluate_retrieval_mrr(model, dataset_vectors, df, sample_size=50, top_k=5, query_field='detailed_description'):
     """
     Evaluates the retrieval model using Known-Item Search.
-    Randomly samples games, uses their description as a query, and checks
+    Randomly samples games, uses a held-out text field as the query, and checks
     how well the model ranks the original game.
+
+    Default behavior uses `detailed_description` so the validation does not reuse
+    the same field that is already part of the embedding input.
     """
-    if len(df) < sample_size:
-        sample_size = len(df)
+
+    if query_field not in df.columns:
+        query_field = 'short_description'
+
+    eval_df = df[df[query_field].astype(str).str.strip() != ''].copy()
+    if len(eval_df) == 0:
+        eval_df = df.copy()
+        query_field = 'short_description' if 'short_description' in df.columns else df.columns[0]
+
+    if len(eval_df) < sample_size:
+        sample_size = len(eval_df)
         
     # Randomly sample games
-    sample_df = df.sample(n=sample_size, random_state=42)
+    sample_df = eval_df.sample(n=sample_size, random_state=42)
     
-    queries = sample_df['short_description'].tolist()
+    queries = sample_df[query_field].tolist()
     target_indices = sample_df.index.tolist()
     
     # Batch encode all queries for performance
