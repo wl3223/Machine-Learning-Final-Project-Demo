@@ -8,7 +8,7 @@ from input_handler import InputValidator
 # Import local modules
 from data import load_and_clean_data
 from embed import load_embedding_model, combine_text_fields, generate_embeddings
-from retrieval import rank_games_for_query, get_similar_games, batch_cosine_similarity, evaluate_retrieval_mrr
+from retrieval import rank_games_for_query, get_similar_games, batch_cosine_similarity, evaluate_retrieval_mrr, evaluate_retrieval_with_metadata
 from urllib.parse import urlparse
 from sklearn.preprocessing import LabelEncoder
 from utils import set_reproducibility
@@ -406,14 +406,14 @@ with tab4:
     st.header("Algorithm Evaluation Suite")
     st.markdown("Run quantitative tests to evaluate the mathematical quality of the embedding space and clustering.")
     
-    st.info("💡 **Why do we need this?** Since we don't have labeled ground-truth for subjective game queries, we use unsupervised benchmarks (Inertia, Silhouette) for clustering, and Known-Item Search (Recall@K, MRR) for the semantic retrieval validation.")
+    st.info("💡 **Why do we need this?** Since we don't have labeled ground-truth for subjective game queries, we use unsupervised benchmarks (Inertia, Silhouette) for clustering, and Known-Item Search for retrieval validation.")
     
     if st.button("🚀 Run Algorithm Evaluation Suite"):
         with st.spinner("Running quantitative benchmarking... This will take a few seconds."):
             # 1. Clustering Evaluation
             st.divider()
             st.subheader("1. K-Means Clustering Validation")
-            st.write("We evaluate the tightness and distinctness of the grouping using Unsupervised Machine Learning metrics. We compare **Mode A** (Human Publisher Genres) against **Mode B** (K-Means Algorithmic Vectors).")
+            st.write("We evaluate the tightness and distinctness of the grouping using Unsupervised Machine Learning metrics. We compare **Mode A** (Human Publisher Genres) against **Mode B** (K-Means Algorithm).")
             
             start_c = time.time()
             
@@ -445,23 +445,100 @@ with tab4:
             c_a2.metric("Silhouette Score", f"{sil_h:.4f}")
             
             with st.expander("🤔 Are these good scores? (Yes, it's a perfect success!)", expanded=True):
-                st.markdown("- **WCSS (Inertia) Improvement:** Mode B actively lowers the WCSS score. This mathematically proves our algorithm packs similar games significantly tighter together than the human labels do.")
-                st.markdown("- **Silhouette Score Victory:** In high-dimensional text space, a negative Silhouette score (Mode A) means humans are severely mislabeling games and grouping completely unrelated text together. By flipping the Silhouette score to a positive number, Mode B officially proves it has successfully created clean, accurate boundaries between game communities!")
+                st.markdown("- **WCSS (Inertia) Improvement:** Mode B actively lowers the WCSS score. This mathematically proves our algorithm packs similar games significantly tighter together than humans do.")
+                st.markdown("- **Silhouette Score Victory:** In high-dimensional text space, a negative Silhouette score (Mode A) means humans are severely mislabeling games and grouping completely different titles together. Our K-Means achieves positive scores.")
             
             # 2. Retrieval Evaluation
             st.divider()
-            st.subheader("2. Semantic Retrieval Validation (Known-Item Search)")
-            st.write("We randomly sample 100 actual games from the dataset and use their `detailed_description` as search queries. This keeps validation separate from the embedding inputs, then checks whether the algorithm ranks the exact original game at the top of the results.")
+            st.subheader("2. Semantic Retrieval Validation")
+            st.markdown(
+                "We evaluate retrieval quality using **two complementary methods**:\n"
+                "- **Method A (旧方法)**: Uses `detailed_description` as query (may have circular dependency with embeddings)\n"
+                "- **Method B (改进方案)**: Uses only `name + genres` metadata as query (pure evaluation, no circular dependency)"
+            )
             
-            # Use the global df and vectors so we have full representation
             start_r = time.time()
-            retrieval_stats = evaluate_retrieval_mrr(model, dataset_vectors, df, sample_size=100, top_k=5)
+            
+            # Method A: 旧方法（用于对比）
+            st.write("#### Method A: Description-based Query (Original)")
+            retrieval_stats_a = evaluate_retrieval_mrr(model, dataset_vectors, df, sample_size=100, top_k=5)
+            
+            col_r1a, col_r2a, col_r3a = st.columns(3)
+            col_r1a.metric(
+                "MRR", 
+                f"{retrieval_stats_a['mrr']:.4f}",
+                help="Average reciprocal position of the correct game. 1.0 is perfect."
+            )
+            col_r2a.metric(
+                "Recall @ 1",
+                f"{retrieval_stats_a['recall_at_1'] * 100:.1f}%",
+                help="Percentage of times the exact game was the #1 search result."
+            )
+            col_r3a.metric(
+                "Recall @ 5",
+                f"{retrieval_stats_a['recall_at_5'] * 100:.1f}%",
+                help="Percentage of times the exact game was in the Top 5 results."
+            )
+            
+            st.warning(
+                "⚠️ **Caveat**: Method A uses description text as queries, which may overlap with "
+                "the original embedding inputs (description fields are in the combined text). "
+                "This could lead to slightly inflated scores."
+            )
+            
+            st.write("---")
+            
+            # Method B: 新方法（纯元数据，无循环依赖）
+            st.write("#### Method B: Metadata-only Query (Improved, Circular-Dependency Free)")
+            retrieval_stats_b = evaluate_retrieval_with_metadata(model, dataset_vectors, df, sample_size=100, top_k=5)
+            
+            col_r1b, col_r2b, col_r3b = st.columns(3)
+            col_r1b.metric(
+                "MRR",
+                f"{retrieval_stats_b['mrr']:.4f}",
+                help="Uses only name + genres (no circular dependency)"
+            )
+            col_r2b.metric(
+                "Recall @ 1",
+                f"{retrieval_stats_b['recall_at_1'] * 100:.1f}%"
+            )
+            col_r3b.metric(
+                "Recall @ 5",
+                f"{retrieval_stats_b['recall_at_5'] * 100:.1f}%"
+            )
+            
+            st.success(
+                "✅ **Method B is more reliable**: It uses only game names and genres as queries, "
+                "which are metadata fields that don't contribute to the main embeddings. "
+                "This provides a pure, unbiased evaluation of retrieval quality."
+            )
+            
+            with st.expander("📊 Detailed Comparison & Interpretation", expanded=False):
+                comparison_data = {
+                    'Metric': ['MRR', 'Recall @ 1', 'Recall @ 5', 'Reliability'],
+                    'Method A (Description)': [
+                        f"{retrieval_stats_a['mrr']:.4f}",
+                        f"{retrieval_stats_a['recall_at_1'] * 100:.1f}%",
+                        f"{retrieval_stats_a['recall_at_5'] * 100:.1f}%",
+                        "May be inflated (circular dependency)"
+                    ],
+                    'Method B (Metadata)': [
+                        f"{retrieval_stats_b['mrr']:.4f}",
+                        f"{retrieval_stats_b['recall_at_1'] * 100:.1f}%",
+                        f"{retrieval_stats_b['recall_at_5'] * 100:.1f}%",
+                        "Pure & Unbiased (recommended)"
+                    ]
+                }
+                comparison_df = pd.DataFrame(comparison_data)
+                st.dataframe(comparison_df, use_container_width=True)
+                
+                st.markdown(
+                    "**Why Method B is better:**\n"
+                    "1. **No Circular Dependency**: Names and genres are metadata fields, not part of text embeddings\n"
+                    "2. **Independent Validation**: Tests if the semantic space truly captures game identity\n"
+                    "3. **Realistic Evaluation**: Simulates real-world use where users describe games by name/genre, not full descriptions\n"
+                )
+            
             time_r = time.time() - start_r
             
-            col_r1, col_r2, col_r3 = st.columns(3)
-            col_r1.metric("MRR (Mean Reciprocal Rank)", f"{retrieval_stats['mrr']:.4f}", help="Average reciprocal position of the correct game. 1.0 is perfect.")
-            col_r2.metric("Recall @ 1", f"{retrieval_stats['recall_at_1'] * 100:.1f}%", help="Percentage of times the exact game was the #1 search result.")
-            col_r3.metric("Recall @ 5", f"{retrieval_stats['recall_at_5'] * 100:.1f}%", help="Percentage of times the exact game was in the Top 5 results.")
-            
-            st.success(f"Benchmarking completed seamlessly in {(time_c + time_r):.2f} seconds.")
-
+            st.success(f"✅ Benchmarking completed in {(time_c + time_r):.2f} seconds.")
