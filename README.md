@@ -55,9 +55,9 @@ A Streamlit web application to discover Steam games through natural text search,
    ./.venv/bin/python -m streamlit run app.py
    ```
 
-   On Windows/Git Bash:
+   On Windows/Git Bash (as Windows does not have bin):
    ```powershell
-   .\.venv\Scripts\python.exe -m streamlit run app.py
+   ./.venv/Scripts/python.exe -m streamlit run app.py
    ```
 
 Note: On the first launch, the application will automatically download the dataset `FronkonGames/steam-games-dataset` from Hugging Face and generate vector embeddings. Please allow a few minutes for this initialization process.
