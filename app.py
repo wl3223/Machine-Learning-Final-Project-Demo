@@ -128,38 +128,81 @@ st.markdown("Discover Steam games through natural text, dealbreakers, and vector
 
 # SIDEBAR FILTERS (Phase 6)
 st.sidebar.header("Filter Results")
+# 价格范围
 min_price, max_price = st.sidebar.slider("Price Range", 0.0, 100.0, (0.0, 100.0))
-
-# All available genres
-# --- DATA CLEANING VITAL LOGIC FOR TEACHER REVIEW ---
-# 1. str.split(',') breaks the properly formatted "Action, RPG" string into ["Action", " RPG"].
-# 2. Python's `set()` is utilized here for mathematical deduplication (Hash table).
-# 3. This forces thousands of repetitive cross-game genres to collapse into singular, unique options 
-#    for the sidebar, preventing "Dimension Explosion" in the UI frontend.
+# 所有可用流派
 all_genres = set()
 for g_list in df['genres'].str.split(','):
     if type(g_list) is list:
-        all_genres.update([g.strip() for g in g_list if g.strip()])
-        
+        all_genres.update([g.strip() for g in g_list if g.strip()])   
 selected_genres = st.sidebar.multiselect("Require Genres:", sorted(list(all_genres)))
-
+st.sidebar.header("Advanced Filters")
+# 1. Metacritic评分范围
+if 'metacritic_score' in df.columns and df['metacritic_score'].max() > 0:
+    min_metacritic, max_metacritic = st.sidebar.slider(
+        "Metacritic Score",
+        int(df['metacritic_score'].min()),
+        int(df['metacritic_score'].max()),
+        (int(df['metacritic_score'].min()), int(df['metacritic_score'].max()))
+    )
+else:
+    min_metacritic, max_metacritic = 0, 100
+# 2. 发行年份范围
+if 'release_year' in df.columns:
+    min_year_val = int(df['release_year'].min()) if df['release_year'].min() > 0 else 2000
+    max_year_val = int(df['release_year'].max())
+    min_year, max_year = st.sidebar.slider(
+        "Release Year",
+        min_year_val,
+        max_year_val,
+        (min_year_val, max_year_val)
+    )
+else:
+    min_year, max_year = 2000, 2025
+# 3. 分类（Categories）多选
+all_categories = set()
+for c_list in df['categories'].str.split(','):
+    if type(c_list) is list:
+        all_categories.update([c.strip() for c in c_list if c.strip()])
+generic_categories = {'Single-player', 'Family Sharing', 'Steam Achievements', 'Steam Cloud', 'Profile Features Limited'}
+meaningful_categories = sorted([c for c in all_categories if c and c not in generic_categories])
+selected_categories = st.sidebar.multiselect("Include Categories:", meaningful_categories)
+# 4. 仅显示免费游戏
+free_games_only = st.sidebar.checkbox("Free Games Only", value=False)
 def normalize_genre_tokens(genre_text):
     if genre_text is None:
         return set()
     return {token.strip().lower() for token in str(genre_text).split(',') if token.strip()}
-
-# Apply filters
+# 基础mask：价格范围
 mask = (df['price'] >= min_price) & (df['price'] <= max_price)
+# 高级过滤：Metacritic评分
+if 'metacritic_score' in df.columns:
+    mask = mask & (df['metacritic_score'] >= min_metacritic) & (df['metacritic_score'] <= max_metacritic)
+# 高级过滤：发行年份
+if 'release_year' in df.columns:
+    mask = mask & (df['release_year'] >= min_year) & (df['release_year'] <= max_year)
+# 高级过滤：免费游戏
+if free_games_only:
+    mask = mask & (df['price'] == 0)
+# 流派过滤
 if selected_genres:
-    # Game must contain at least one exact selected genre token
     selected_genres_normalized = {genre.strip().lower() for genre in selected_genres}
     genre_mask = df['genres'].apply(
         lambda value: bool(normalize_genre_tokens(value).intersection(selected_genres_normalized))
     )
     mask = mask & genre_mask
-
+# 分类过滤
+if selected_categories:
+    def check_categories(cat_text):
+        cat_tokens = {token.strip().lower() for token in str(cat_text).split(',') if token.strip()}
+        selected_cats_normalized = {cat.strip().lower() for cat in selected_categories}
+        return bool(cat_tokens.intersection(selected_cats_normalized))
+    
+    category_mask = df['categories'].apply(check_categories)
+    mask = mask & category_mask
 filtered_df = df[mask].copy()
 st.sidebar.text(f"Showing {len(filtered_df)} games out of {len(df)}")
+
 
 # UI Tabs
 tab1, tab2, tab3, tab4 = st.tabs(["🔍 Semantic Search", "😲 Surprise Me (Cross-Genre)", "📈 Data & Visuals", "📊 Eval & Metrics"])
