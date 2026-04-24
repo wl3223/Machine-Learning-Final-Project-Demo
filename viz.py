@@ -130,3 +130,36 @@ def plot_top_genres(df):
     )
     return fig
 
+def plot_elbow_silhouette(metrics_df):
+    """Plots Inertia (Elbow) and Silhouette Score against K values."""
+    from plotly.subplots import make_subplots
+    import plotly.graph_objects as go
+    
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    
+    fig.add_trace(
+        go.Scatter(x=metrics_df['k'], y=metrics_df['inertia'], name="Inertia (WCSS)", line=dict(color="#47bfff", width=3)),
+        secondary_y=False,
+    )
+    
+    fig.add_trace(
+        go.Scatter(x=metrics_df['k'], y=metrics_df['silhouette'], name="Silhouette Score", line=dict(color="#ff9900", width=3)),
+        secondary_y=True,
+    )
+    
+    fig.update_layout(
+        title="Elbow Method & Silhouette Score vs K",
+        template="plotly_dark",
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        font_color='#c6d4df',
+        title_font_color='#ffffff',
+        hovermode="x unified",
+        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
+    )
+    
+    fig.update_xaxes(title_text="Number of Clusters (k)", tickmode='linear', tick0=2, dtick=1)
+    fig.update_yaxes(title_text="<b>Inertia</b> (Lower is Better)", color="#47bfff", secondary_y=False)
+    fig.update_yaxes(title_text="<b>Silhouette Score</b> (Higher is Better)", color="#ff9900", secondary_y=True)
+    
+    return fig

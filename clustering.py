@@ -138,6 +138,26 @@ def compute_clustering_metrics(data, labels, n_samples=3000):
         
     return inertia, sil_score
 
+@st.cache_data(show_spinner=False)
+def find_optimal_k(_dataset_vectors, k_min=2, k_max=15, seed=42):
+    """
+    Runs K-Means for a range of k values to compute Inertia and Silhouette scores.
+    Returns a DataFrame with the results.
+    """
+    import pandas as pd
+    results = []
+    # To keep it fast for UI, if dataset is huge we could subsample, but our k-means is fast enough
+    for k in range(k_min, k_max + 1):
+        labels = perform_kmeans_clustering(_dataset_vectors, n_clusters=k, seed=seed, max_iter=50)
+        inertia, sil_score = compute_clustering_metrics(_dataset_vectors, labels)
+        results.append({
+            'k': k,
+            'inertia': inertia,
+            'silhouette': sil_score
+        })
+    return pd.DataFrame(results)
+
+
 def get_cluster_profiles(df, cluster_col='Cluster', n_top=3):
     """
     Extracts the top n genres, categories, and numeric stats for each cluster 
