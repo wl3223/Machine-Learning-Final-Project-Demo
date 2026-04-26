@@ -15,6 +15,7 @@ from clustering import perform_kmeans_clustering, compute_clustering_metrics, ge
 # Constants
 MVP_DATA_LIMIT = 10000
 RANDOM_SEED = 42
+TUTORIAL_FOCUS_Y_OFFSET = "6.5rem"
 
 set_reproducibility(RANDOM_SEED)
 
@@ -108,36 +109,56 @@ TUTORIAL_STEPS = [
         "description": "Use this slider to set the price range for games you want to see. The filter updates results in real-time.",
         "target": "price_slider",
         "position": "right",
+        "focus_box": "left: 0.75rem; top: 3.1rem; width: 16.2rem; height: 4.8rem; border-radius: 10px;",
     },
     {
         "title": "Genre Filter",
-        "description": "Select specific genres to narrow down games. You can choose multiple genres at once.",
+        "description": "Select specific genres to narrow down games. You can choose multiple genres at once. Specified genres will be prioritized and listed first in results.",
         "target": "genre_multiselect",
         "position": "right",
+        "focus_box": "left: 0.75rem; top: 9.5rem; width: 16.2rem; height: 5.2rem; border-radius: 10px;",
     },
     {
         "title": "Advanced Filters",
-        "description": "Fine-tune your search with Metacritic Score, Release Year, and Free Games Only options.",
+        "description": "Fine-tune your search with Metacritic Score (online critical rating), Release Year, and Free Games Only options. The Include Categories dropdown also provides technical specifications (Commentary Available, Full Controller Support, etc.) to consider when providing matches.",
         "target": "advanced_filters",
         "position": "right",
+        "focus_box": "left: 0.75rem; top: 14.8rem; width: 16.2rem; height: 21.0rem; border-radius: 10px;",
     },
     {
         "title": "Semantic Search Tab",
-        "description": "Describe the game you want to play in natural language. Add dealbreakers to exclude unwanted features.",
+        "description": "Describe the game you want to play in natural language. Add dealbreakers to exclude unwanted features. The algorithm will subtract your dealbreakers from your main query to find the best games for you.",
         "target": "search_tab",
         "position": "bottom",
+        "focus_box": "left: 19.2rem; top: 26.0rem; right: 1.2rem; height: 15.4rem; border-radius: 10px;",
+    },
+    {
+        "title": "Retrieval Controls",
+        "description": "Use the Retrieval Algorithm and Sort Matches By controls to change how games are ranked and displayed. Changing the Retrieval Algorithm may produce different results as matches are calculated differently. Sorting by Total Positive Reviews or Estimated Owners will prioritize more popular games, while sorting by Price will show cheaper options first.",
+        "target": "retrieval_controls",
+        "position": "bottom",
+        "focus_box": "left: 19.2rem; top: 42.0rem; right: 1.2rem; height: 15.4rem; border-radius: 10px;",
     },
     {
         "title": "Surprise Me Tab",
-        "description": "Blend two different game concepts and find games in between. Great for discovering unique matches.",
+        "description": "Blend two different game concepts and find games in between. Great for discovering unique matches. We will try to find the games that have the best of both worlds.",
         "target": "surprise_tab",
         "position": "bottom",
+        "focus_box": "left: 30.8rem; top: 22.9rem; width: 12.8rem; height: 2.2rem; border-radius: 999px;",
     },
     {
         "title": "Data & Visuals Tab",
-        "description": "Explore 2D semantic maps, price distributions, and genre popularity charts.",
+        "description": "See how we group games to gather insights and results. Explore 2D semantic maps, price distributions, and genre popularity charts to see the statistics behind your favorite games. We provide explanations for our mapping.",
         "target": "visuals_tab",
         "position": "bottom",
+        "focus_box": "left: 43.0rem; top: 22.9rem; width: 9.3rem; height: 2.2rem; border-radius: 999px;",
+    },
+    {
+        "title": "Evaluation & Metrics",
+        "description": "Review clustering quality and retrieval performance in the evaluation tab. You can mathematical decisions behind this app and see how we evaluate the quality of our clusters and retrieval algorithms. You can choose to run the Algorithm Evaluation Suite to see how different algorithms perform on our dataset.",
+        "target": "eval_metrics_tab",
+        "position": "bottom",
+        "focus_box": "left: 50.2rem; top: 22.9rem; width: 9.3rem; height: 2.2rem; border-radius: 999px;",
     },
     {
         "title": "Ready to Explore!",
@@ -169,7 +190,21 @@ def render_tutorial_overlay():
     total_steps = len(TUTORIAL_STEPS)
     card_position = get_card_position(step.get("position", "center"))
     progress_percent = (step_num / total_steps) * 100
-    target_id = step.get("target")
+    focus_box_style = step.get("focus_box")
+    focus_box_css = ""
+    if focus_box_style:
+        focus_box_css = f"""
+    body::after {{
+        content: "" !important;
+        position: fixed !important;
+        {focus_box_style}
+        transform: translateY({TUTORIAL_FOCUS_Y_OFFSET}) !important;
+        border: 2px solid rgba(102, 192, 244, 0.95) !important;
+        box-shadow: 0 0 0 6px rgba(102, 192, 244, 0.18), 0 0 18px rgba(102, 192, 244, 0.55) !important;
+        z-index: 2147483640 !important;
+        pointer-events: none !important;
+    }}
+        """
 
     overlay_css = f"""
     <style>
@@ -183,6 +218,7 @@ def render_tutorial_overlay():
         z-index: 8900;
         pointer-events: none;
     }}
+    {focus_box_css}
     div[data-testid="stVerticalBlock"]:has(#tutorial-card-marker):not(:has(div[data-testid="stVerticalBlock"]:has(#tutorial-card-marker))) {{
         position: fixed;
         {card_position}
@@ -255,22 +291,6 @@ def render_tutorial_overlay():
     <div class="tutorial-backdrop"></div>
     """
     st.markdown(overlay_css, unsafe_allow_html=True)
-
-    if target_id:
-        highlight_css = f"""
-        <style>
-        div[data-testid="stVerticalBlock"]:has(#tutorial-target-{target_id}) {{
-            outline: 2px solid rgba(102, 192, 244, 0.95);
-            box-shadow: 0 0 0 6px rgba(102, 192, 244, 0.2), 0 0 18px rgba(102, 192, 244, 0.55);
-            border-radius: 8px;
-            padding: 6px;
-        }}
-        div[data-testid="stVerticalBlock"]:has(#tutorial-target-{target_id}) #tutorial-target-{target_id} {{
-            display: none;
-        }}
-        </style>
-        """
-        st.markdown(highlight_css, unsafe_allow_html=True)
 
     with st.container():
         st.markdown("<div id='tutorial-card-marker'></div>", unsafe_allow_html=True)
@@ -450,6 +470,7 @@ with tab1:
     
     c_left, c_right = st.columns(2)
     with c_left:
+        st.markdown('<div id="tutorial-target-retrieval_controls"></div>', unsafe_allow_html=True)
         algo = st.radio("Retrieval Algorithm", ["From-Scratch (Custom Math)", "Scikit-Learn (NearestNeighbors)"])
     with c_right:
         sort_by = st.selectbox("Sort Matches By:", ["Match Score (Default)", "Total Positive Reviews", "Estimated Owners", "Price (Low to High)"])
@@ -621,6 +642,7 @@ with tab3:
 
 # TAB 4: EVAL & METRICS
 with tab4:
+    st.markdown('<div id="tutorial-target-eval_metrics_tab"></div>', unsafe_allow_html=True)
     st.header("Algorithm Evaluation Suite")
     st.markdown("Run quantitative tests to evaluate the mathematical quality of the embedding space and clustering.")
     
