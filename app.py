@@ -6,10 +6,8 @@ import numpy as np
 import json
 from sklearn.neighbors import NearestNeighbors
 
-# Import local modules
-from data import load_and_clean_data
 from embed import load_embedding_model, load_cross_encoder_model, load_tfidf_model_and_matrix, combine_text_fields, generate_embeddings
-from retrieval import rank_games_for_query, get_similar_games, batch_cosine_similarity, evaluate_retrieval_mrr, build_robust_query_vector
+from retrieval import rank_games_for_query, get_similar_games, batch_cosine_similarity, evaluate_retrieval_mrr, evaluate_ultimate_pipeline, build_robust_query_vector
 from sklearn.preprocessing import LabelEncoder
 from utils import set_reproducibility
 from viz import perform_pca_projection, plot_2d_map, plot_price_distribution, plot_top_genres, plot_price_pie, plot_elbow_silhouette
@@ -541,6 +539,29 @@ with st.spinner("Initializing Vector Space & Clusters..."):
     df = df_raw.copy()
     df['Cluster'] = [f"Cluster {c}" for c in clusters]
 
+@st.cache_data(show_spinner=False)
+def benchmark_clustering(_dataset_vectors, labels_kmeans, _df):
+    temp_genres = _df['genres'].apply(lambda x: str(x).split(',')[0].strip() if x else 'Unknown')
+    top_g = temp_genres.value_counts().nlargest(10).index
+    temp_genres.loc[~temp_genres.isin(top_g)] = 'Other'
+    labels_human = LabelEncoder().fit_transform(temp_genres)
+    
+    start_c = time.time()
+    inertia_k, sil_k = compute_clustering_metrics(_dataset_vectors, labels_kmeans)
+    inertia_h, sil_h = compute_clustering_metrics(_dataset_vectors, labels_human)
+    return inertia_k, sil_k, inertia_h, sil_h, time.time() - start_c
+
+@st.cache_data(show_spinner=False)
+def benchmark_retrieval(_model, _dataset_vectors, _df, _cross_encoder, _tfidf_vectorizer, _tfidf_matrix):
+    start_r = time.time()
+    stats = evaluate_ultimate_pipeline(_model, _dataset_vectors, _df, _cross_encoder, _tfidf_vectorizer, _tfidf_matrix, sample_size=30, top_k=5)
+    return stats, time.time() - start_r
+
+with st.spinner("Benchmarking Ultimate Architecture Quality (Takes 10-20s, saves to cache forever)..."):
+    # Precalculate global benchmarks immediately
+    inertia_k, sil_k, inertia_h, sil_h, time_c = benchmark_clustering(dataset_vectors, clusters, df)
+    retrieval_stats, time_r = benchmark_retrieval(model, dataset_vectors, df, cross_encoder, tfidf_vectorizer, tfidf_matrix)
+
 # Render tutorial overlay if active
 render_tutorial_overlay()
 
@@ -852,62 +873,35 @@ with tab4:
         fig_ks = plot_elbow_silhouette(st.session_state['k_metrics_df'])
         st.plotly_chart(fig_ks, use_container_width=True, theme=None)
     
-    if st.button("🚀 Run Algorithm Evaluation Suite"):
-
-        with st.spinner("Running quantitative benchmarking... This will take a few seconds."):
-            # 1. Clustering Evaluation
-            st.divider()
-            st.subheader("1. K-Means Clustering Validation")
-            st.write("We evaluate the tightness and distinctness of the grouping using Unsupervised Machine Learning metrics. We compare **Mode A** (Human Publisher Genres) against **Mode B** (K-Means Algorithmic Vectors).")
-            
-            start_c = time.time()
-            
-            # --- Evaluate K-Means (Mode B) ---
-            labels_kmeans = np.array([int(c.split(' ')[1]) for c in df['Cluster']])
-            inertia_k, sil_k = compute_clustering_metrics(dataset_vectors, labels_kmeans)
-            
-            # --- Evaluate Primary Genres (Mode A) ---
-            # Extract primary genres and limit to top 10 like viz does
-            temp_genres = df['genres'].apply(lambda x: str(x).split(',')[0].strip() if x else 'Unknown')
-            top_g = temp_genres.value_counts().nlargest(10).index
-            temp_genres.loc[~temp_genres.isin(top_g)] = 'Other'
-            
-            # Convert text categories to integer labels for scoring
-            labels_human = LabelEncoder().fit_transform(temp_genres)
-            inertia_h, sil_h = compute_clustering_metrics(dataset_vectors, labels_human)
-            
-            time_c = time.time() - start_c
-            
-            st.markdown("#### Mode B: K-Means Algorithm (Our Method)")
-            c_b1, c_b2, c_b3 = st.columns(3)
-            c_b1.metric("WCSS (Inertia)", f"{inertia_k:,.0f}", delta=f"{inertia_k - inertia_h:,.0f} vs Human", delta_color="inverse")
-            c_b2.metric("Silhouette Score", f"{sil_k:.4f}", delta=f"{sil_k - sil_h:.4f} vs Human", delta_color="normal")
-            c_b3.metric("Computation Time", f"{time_c:.2f}s")
-            
-            st.markdown("#### Mode A: Publisher Primary Genres (Human Baseline)")
-            c_a1, c_a2 = st.columns(2)
-            c_a1.metric("WCSS (Inertia)", f"{inertia_h:,.0f}")
-            c_a2.metric("Silhouette Score", f"{sil_h:.4f}")
-            
-            with st.expander("🤔 Are these good scores? (Yes, it's a perfect success!)", expanded=True):
-                st.markdown("- **WCSS (Inertia) Improvement:** Mode B actively lowers the WCSS score. This mathematically proves our algorithm packs similar games significantly tighter together than the human labels do.")
-                st.markdown("- **Silhouette Score Victory:** In high-dimensional text space, a negative Silhouette score (Mode A) means humans are severely mislabeling games and grouping completely unrelated text together. By flipping the Silhouette score to a positive number, Mode B officially proves it has successfully created clean, accurate boundaries between game communities!")
-            
-            # 2. Retrieval Evaluation
-            st.divider()
-            st.subheader("2. Semantic Retrieval Validation (Known-Item Search)")
-            st.markdown("We evaluate our **Ultimate Three-Stage Hybrid Pipeline** (Bi-Encoder Dense Search + TF-IDF Sparse Search + Cross-Encoder Precision Rerank) against the dataset.")
-            st.write("Testing Methodology: We randomly sample 100 test games and use their isolated `detailed_description` to search the database. This checks whether our base vector architecture accurately ranks the original game at the top.")
-            st.info("💡 **Note:** The benchmarks below evaluate our foundational *Stage-1 Bi-Encoder* logic. Our live search app is actually **significantly more accurate** than these numbers because it mathematically injects the exact-keyword TF-IDF Matrix and the Deep Learning Cross-Encoder on top of this baseline!")
-            
-            # Use the global df and vectors so we have full representation
-            start_r = time.time()
-            retrieval_stats = evaluate_retrieval_mrr(model, dataset_vectors, df, sample_size=100, top_k=5)
-            time_r = time.time() - start_r
-            
-            col_r1, col_r2, col_r3 = st.columns(3)
-            col_r1.metric("MRR (Mean Reciprocal Rank)", f"{retrieval_stats['mrr']:.4f}", help="Average reciprocal position of the correct game. 1.0 is perfect.")
-            col_r2.metric("Recall @ 1", f"{retrieval_stats['recall_at_1'] * 100:.1f}%", help="Percentage of times the exact game was the #1 search result.")
-            col_r3.metric("Recall @ 5", f"{retrieval_stats['recall_at_5'] * 100:.1f}%", help="Percentage of times the exact game was in the Top 5 results.")
-            
-            st.success(f"Benchmarking completed seamlessly in {(time_c + time_r):.2f} seconds.")
+    st.divider()
+    st.subheader("1. K-Means Clustering Validation")
+    st.write("We evaluate the tightness and distinctness of the grouping using Unsupervised Machine Learning metrics. We compare **Mode A** (Human Publisher Genres) against **Mode B** (K-Means Algorithmic Vectors).")
+    
+    st.markdown("#### Mode B: K-Means Algorithm (Our Method)")
+    c_b1, c_b2, c_b3 = st.columns(3)
+    c_b1.metric("WCSS (Inertia)", f"{inertia_k:,.0f}", delta=f"{inertia_k - inertia_h:,.0f} vs Human", delta_color="inverse")
+    c_b2.metric("Silhouette Score", f"{sil_k:.4f}", delta=f"{sil_k - sil_h:.4f} vs Human", delta_color="normal")
+    c_b3.metric("Computation Time", f"{time_c:.2f}s")
+    
+    st.markdown("#### Mode A: Publisher Primary Genres (Human Baseline)")
+    c_a1, c_a2 = st.columns(2)
+    c_a1.metric("WCSS (Inertia)", f"{inertia_h:,.0f}")
+    c_a2.metric("Silhouette Score", f"{sil_h:.4f}")
+    
+    with st.expander("🤔 Are these good scores? (Yes, it's a perfect success!)", expanded=True):
+        st.markdown("- **WCSS (Inertia) Improvement:** Mode B actively lowers the WCSS score. This mathematically proves our algorithm packs similar games significantly tighter together than the human labels do.")
+        st.markdown("- **Silhouette Score Victory:** In high-dimensional text space, a negative Silhouette score (Mode A) means humans are severely mislabeling games and grouping completely unrelated text together. By flipping the Silhouette score to a positive number, Mode B officially proves it has successfully created clean, accurate boundaries between game communities!")
+    
+    # 2. Retrieval Evaluation
+    st.divider()
+    st.subheader("2. Semantic Retrieval Validation (Known-Item Search)")
+    st.markdown("We evaluate our **Ultimate Three-Stage Hybrid Pipeline** (Bi-Encoder Dense Search + TF-IDF Sparse Search + Cross-Encoder Precision Rerank) against the dataset.")
+    st.write("Testing Methodology: We ran a randomized evaluation across N=30 test games. For each game, we isolated its `detailed_description` to search the database. This directly checks whether our Ultimate Hybrid mathematically forces the original exact game back out at the top.")
+    st.info("💡 **Performance Note:** Because our Ultimate Pipeline runs pure deep learning sequences (Cross-Encoder) on this benchmark to achieve maximum accuracy, it calculated seamlessly during initial app boot and was cached globally across views to preserve instant page navigation.")
+    
+    col_r1, col_r2, col_r3 = st.columns(3)
+    col_r1.metric("MRR (Mean Reciprocal Rank)", f"{retrieval_stats['mrr']:.4f}", help="Average reciprocal position of the correct game. 1.0 is perfect.")
+    col_r2.metric("Recall @ 1", f"{retrieval_stats['recall_at_1'] * 100:.1f}%", help="Percentage of times the exact game was the #1 search result.")
+    col_r3.metric("Recall @ 5", f"{retrieval_stats['recall_at_5'] * 100:.1f}%", help="Percentage of times the exact game was in the Top 5 results.")
+    
+    st.success(f"Benchmarking computed securely in {(time_c + time_r):.2f} seconds globally at boot.")

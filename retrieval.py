@@ -282,3 +282,62 @@ def evaluate_retrieval_mrr(model, dataset_vectors, df, sample_size=50, top_k=5, 
         "recall_at_5": recall_at_5,
         "sample_size": sample_size
     }
+
+def evaluate_ultimate_pipeline(model, dataset_vectors, df, cross_encoder, tfidf_vectorizer, tfidf_matrix, sample_size=30, top_k=5, query_field='detailed_description'):
+    """
+    Evaluates the full Three-Stage Hybrid Pipeline ensuring testing fidelity.
+    Passes queries exactly through the final rank_games_for_query logic.
+    """
+    if query_field not in df.columns:
+        query_field = 'short_description'
+
+    eval_df = df[df[query_field].astype(str).str.strip() != ''].copy()
+    if len(eval_df) < sample_size:
+        sample_size = len(eval_df)
+        
+    sample_df = eval_df.sample(n=sample_size, random_state=42)
+    target_indices = sample_df.index.tolist()
+    
+    reciprocal_ranks = []
+    hits_at_1 = 0
+    hits_at_5 = 0
+    all_indices = df.index.tolist()
+    
+    for target_idx in target_indices:
+        query_str = eval_df.loc[target_idx, query_field]
+        eval_fetch_depth = 50 
+        
+        # Heavy computation: Execute the entire dense + sparse + cross pipeline 
+        results = rank_games_for_query(
+            query_string=query_str, 
+            negative_query_string="", 
+            model=model, 
+            dataset_vectors=dataset_vectors, 
+            df=df, 
+            top_k=eval_fetch_depth, 
+            alpha=0.0, 
+            cross_encoder=cross_encoder, 
+            tfidf_vectorizer=tfidf_vectorizer, 
+            tfidf_matrix=tfidf_matrix, 
+            filtered_indices=all_indices
+        )
+        
+        df_index_pos = results.index.tolist()
+        
+        if target_idx in df_index_pos:
+            rank = df_index_pos.index(target_idx) + 1
+        else:
+            rank = eval_fetch_depth + 1
+            
+        reciprocal_ranks.append(1.0 / rank)
+        if rank == 1:
+            hits_at_1 += 1
+        if rank <= top_k:
+            hits_at_5 += 1
+            
+    return {
+        "mrr": np.mean(reciprocal_ranks),
+        "recall_at_1": hits_at_1 / sample_size,
+        "recall_at_5": hits_at_5 / sample_size,
+        "sample_size": sample_size
+    }
