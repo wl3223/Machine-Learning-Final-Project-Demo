@@ -681,6 +681,20 @@ with tab1:
     with c_right:
         sort_by = st.selectbox("Sort Matches By:", ["Match Score (Default)", "Total Positive Reviews", "Estimated Owners", "Price (Low to High)"])
 
+    with st.expander("📚 Metric Definitions (How to read these scores?)"):
+        st.markdown(
+            "**1. Final DL Confidence (Cross-Encoder / Match Score):** Ranging from `0.0` to `1.0`, this is the primary precision probability score. "
+            "A `1.00` means the Deep Learning sequence-classifier is absolutely mathematically certain the game directly answers your search query."
+        )
+        st.markdown(
+            "**2. Base Geometry RRF (Stage-1 Pool Score):** This is the underlying algorithm score used to find the broad candidate pool. "
+            "Because it mathematically fuses both `Dense (Vibe)` and `Sparse (Exact Keyword)` rank positions via the formula `1/(60+Rank)`, **the absolute mathematical maximum score is completely capped at 0.033** (`1/60 + 1/60`). A score of `0.033` confirms the game achieved perfect #1 placement in both independent search methods!"
+        )
+        st.markdown(
+            "**3. Similar Games Score (Cosine Similarity):** When expanding 'Find Similar Games', the app dumps reranking and instead measures the raw **Cosine Angular Distance** between the 384-dimensional text embeddings of the two games. "
+            "Because this measures pure high-dimensional geometry, scores naturally stay around `0.45` to `0.65` even for extremely similar games (a perfect `1.0` would mean their database text is an identical clone)."
+        )
+
     if st.button("Search"):
         if query and len(filtered_df) > 0:
             start_time = time.time()
