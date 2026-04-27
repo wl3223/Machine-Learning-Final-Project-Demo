@@ -15,6 +15,7 @@ from clustering import perform_kmeans_clustering, compute_clustering_metrics, ge
 # Constants
 MVP_DATA_LIMIT = 10000
 RANDOM_SEED = 42
+TUTORIAL_FOCUS_Y_OFFSET = "6.5rem"
 
 set_reproducibility(RANDOM_SEED)
 
@@ -95,6 +96,237 @@ li[role="option"]:hover, li[role="option"][aria-selected="true"] {
 """
 st.markdown(STEAM_CSS, unsafe_allow_html=True)
 
+# Tutorial Steps Configuration
+TUTORIAL_STEPS = [
+    {
+        "title": "Welcome to the Tutorial",
+        "description": "This walkthrough will guide you through all the key features of the Steam Game Discovery Explorer. You'll learn about filters, search options, and visualizations.",
+        "target": None,
+        "position": "center",
+    },
+    {
+        "title": "Price Range Filter",
+        "description": "Use this slider to set the price range for games you want to see. The filter updates results in real-time.",
+        "target": "price_slider",
+        "position": "right",
+        "focus_box": "left: 0.75rem; top: 3.1rem; width: 16.2rem; height: 4.8rem; border-radius: 10px;",
+    },
+    {
+        "title": "Genre Filter",
+        "description": "Select specific genres to narrow down games. You can choose multiple genres at once. Specified genres will be prioritized and listed first in results.",
+        "target": "genre_multiselect",
+        "position": "right",
+        "focus_box": "left: 0.75rem; top: 9.5rem; width: 16.2rem; height: 5.2rem; border-radius: 10px;",
+    },
+    {
+        "title": "Advanced Filters",
+        "description": "Fine-tune your search with Metacritic Score (online critical rating), Release Year, and Free Games Only options. The Include Categories dropdown also provides technical specifications (Commentary Available, Full Controller Support, etc.) to consider when providing matches.",
+        "target": "advanced_filters",
+        "position": "right",
+        "focus_box": "left: 0.75rem; top: 14.8rem; width: 16.2rem; height: 21.0rem; border-radius: 10px;",
+    },
+    {
+        "title": "Semantic Search Tab",
+        "description": "Describe the game you want to play in natural language. Add dealbreakers to exclude unwanted features. The algorithm will subtract your dealbreakers from your main query to find the best games for you.",
+        "target": "search_tab",
+        "position": "bottom",
+        "focus_box": "left: 19.2rem; top: 26.0rem; right: 1.2rem; height: 15.4rem; border-radius: 10px;",
+    },
+    {
+        "title": "Retrieval Controls",
+        "description": "Use the Retrieval Algorithm and Sort Matches By controls to change how games are ranked and displayed. Changing the Retrieval Algorithm may produce different results as matches are calculated differently. Sorting by Total Positive Reviews or Estimated Owners will prioritize more popular games, while sorting by Price will show cheaper options first.",
+        "target": "retrieval_controls",
+        "position": "bottom",
+        "focus_box": "left: 19.2rem; top: 42.0rem; right: 1.2rem; height: 15.4rem; border-radius: 10px;",
+    },
+    {
+        "title": "Surprise Me Tab",
+        "description": "Blend two different game concepts and find games in between. Great for discovering unique matches. We will try to find the games that have the best of both worlds.",
+        "target": "surprise_tab",
+        "position": "bottom",
+        "focus_box": "left: 30.8rem; top: 22.9rem; width: 12.8rem; height: 2.2rem; border-radius: 999px;",
+    },
+    {
+        "title": "Data & Visuals Tab",
+        "description": "See how we group games to gather insights and results. Explore 2D semantic maps, price distributions, and genre popularity charts to see the statistics behind your favorite games. We provide explanations for our mapping.",
+        "target": "visuals_tab",
+        "position": "bottom",
+        "focus_box": "left: 43.0rem; top: 22.9rem; width: 9.3rem; height: 2.2rem; border-radius: 999px;",
+    },
+    {
+        "title": "Evaluation & Metrics",
+        "description": "Review clustering quality and retrieval performance in the evaluation tab. You can mathematical decisions behind this app and see how we evaluate the quality of our clusters and retrieval algorithms. You can choose to run the Algorithm Evaluation Suite to see how different algorithms perform on our dataset.",
+        "target": "eval_metrics_tab",
+        "position": "bottom",
+        "focus_box": "left: 50.2rem; top: 22.9rem; width: 9.3rem; height: 2.2rem; border-radius: 999px;",
+    },
+    {
+        "title": "Ready to Explore!",
+        "description": "You now understand the main features. Click 'Finish' to start using the explorer.",
+        "target": None,
+        "position": "center",
+    },
+]
+
+def get_card_position(position_type):
+    """Get CSS positioning based on card location."""
+    positions = {
+        "center": "top: 50%; left: 50%; transform: translate(-50%, -50%);",
+        "right": "top: 140px; left: 22rem; transform: none;",
+        "bottom": "bottom: 1.5rem; left: 50%; transform: translateX(-50%);",
+    }
+    return positions.get(position_type, positions["center"])
+
+def render_tutorial_overlay():
+    """Render tutorial overlay with card and step controls."""
+    if "tutorial_step" not in st.session_state:
+        st.session_state.tutorial_step = 0
+    
+    if st.session_state.tutorial_step >= len(TUTORIAL_STEPS):
+        return False
+    
+    step = TUTORIAL_STEPS[st.session_state.tutorial_step]
+    step_num = st.session_state.tutorial_step + 1
+    total_steps = len(TUTORIAL_STEPS)
+    card_position = get_card_position(step.get("position", "center"))
+    progress_percent = (step_num / total_steps) * 100
+    focus_box_style = step.get("focus_box")
+    focus_box_css = ""
+    if focus_box_style:
+        focus_box_css = f"""
+    body::after {{
+        content: "" !important;
+        position: fixed !important;
+        {focus_box_style}
+        transform: translateY({TUTORIAL_FOCUS_Y_OFFSET}) !important;
+        border: 2px solid rgba(102, 192, 244, 0.95) !important;
+        box-shadow: 0 0 0 6px rgba(102, 192, 244, 0.18), 0 0 18px rgba(102, 192, 244, 0.55) !important;
+        z-index: 2147483640 !important;
+        pointer-events: none !important;
+    }}
+        """
+
+    overlay_css = f"""
+    <style>
+    .tutorial-backdrop {{
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: radial-gradient(circle 800px at 50% 50%, rgba(27, 40, 56, 0.0) 0%, rgba(10, 15, 20, 0.35) 100%);
+        z-index: 8900;
+        pointer-events: none;
+    }}
+    {focus_box_css}
+    div[data-testid="stVerticalBlock"]:has(#tutorial-card-marker):not(:has(div[data-testid="stVerticalBlock"]:has(#tutorial-card-marker))) {{
+        position: fixed;
+        {card_position}
+        width: 380px;
+        background: rgba(23, 26, 33, 0.85);
+        border: 2px solid rgba(102, 192, 244, 0.5);
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+        z-index: 8901;
+        backdrop-filter: blur(8px);
+        animation: slideIn 0.3s ease-out;
+    }}
+    div[data-testid="stVerticalBlock"]:has(#tutorial-card-marker):not(:has(div[data-testid="stVerticalBlock"]:has(#tutorial-card-marker))) #tutorial-card-marker {{
+        display: none;
+    }}
+    @keyframes slideIn {{
+        from {{
+            opacity: 0;
+            transform: scale(0.95);
+        }}
+        to {{
+            opacity: 1;
+            transform: scale(1);
+        }}
+    }}
+    .tutorial-step {{
+        font-size: 0.85rem;
+        color: #66c0f4;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.5rem;
+    }}
+    .tutorial-title {{
+        font-size: 1.4rem;
+        color: #ffffff;
+        font-weight: 600;
+        margin-bottom: 0.75rem;
+    }}
+    .tutorial-description {{
+        font-size: 0.95rem;
+        color: #b0b8c1;
+        line-height: 1.5;
+        margin-bottom: 1.2rem;
+    }}
+    .tutorial-progress {{
+        height: 4px;
+        background: rgba(102, 192, 244, 0.15);
+        border-radius: 2px;
+        overflow: hidden;
+        margin-bottom: 1.2rem;
+    }}
+    .tutorial-progress-bar {{
+        height: 100%;
+        background: linear-gradient(to right, #47bfff, #1a44c2);
+        width: {progress_percent}%;
+        transition: width 0.3s ease;
+    }}
+    div[data-testid="stVerticalBlock"]:has(#tutorial-card-marker):not(:has(div[data-testid="stVerticalBlock"]:has(#tutorial-card-marker))) .stButton > button {{
+        width: 100%;
+        padding: 0.6rem 0.8rem;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }}
+    div[data-testid="stVerticalBlock"]:has(#tutorial-card-marker):not(:has(div[data-testid="stVerticalBlock"]:has(#tutorial-card-marker))) .stButton > button:focus {{
+        box-shadow: 0 0 0 2px rgba(102, 192, 244, 0.3);
+    }}
+    </style>
+    <div class="tutorial-backdrop"></div>
+    """
+    st.markdown(overlay_css, unsafe_allow_html=True)
+
+    with st.container():
+        st.markdown("<div id='tutorial-card-marker'></div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='tutorial-step'>Step {step_num} of {total_steps}</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"<div class='tutorial-title'>{step['title']}</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"<div class='tutorial-description'>{step['description']}</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            "<div class='tutorial-progress'><div class='tutorial-progress-bar'></div></div>",
+            unsafe_allow_html=True,
+        )
+
+        btn_cols = st.columns(2)
+        with btn_cols[0]:
+            if st.button("Skip", key=f"tutorial_skip_{step_num}"):
+                st.session_state.tutorial_step = len(TUTORIAL_STEPS)
+                st.rerun()
+        with btn_cols[1]:
+            next_label = "Finish →" if step_num == total_steps else "Next →"
+            if st.button(next_label, key=f"tutorial_next_{step_num}"):
+                st.session_state.tutorial_step = min(
+                    st.session_state.tutorial_step + 1,
+                    len(TUTORIAL_STEPS)
+                )
+                st.rerun()
+
+    return True
+
 @st.cache_data
 def load_data_and_embeddings():
     df = load_and_clean_data(limit=MVP_DATA_LIMIT)
@@ -124,51 +356,61 @@ with st.spinner("Initializing Vector Space & Clusters..."):
     df = df_raw.copy()
     df['Cluster'] = [f"Cluster {c}" for c in clusters]
 
+# Render tutorial overlay if active
+render_tutorial_overlay()
+
 st.title("🎮 Steam Game Discovery Explorer")
 st.markdown("Discover Steam games through natural text, dealbreakers, and vector similarity.")
 
 # SIDEBAR FILTERS (Phase 6)
 st.sidebar.header("Filter Results")
-min_price, max_price = st.sidebar.slider("Price Range", 0.0, 100.0, (0.0, 100.0))
+with st.sidebar.container():
+    st.sidebar.markdown('<div id="tutorial-target-price_slider"></div>', unsafe_allow_html=True)
+    min_price, max_price = st.sidebar.slider("Price Range", 0.0, 100.0, (0.0, 100.0))
 # 所有可用流派
 all_genres = set()
 for g_list in df['genres'].str.split(','):
     if type(g_list) is list:
         all_genres.update([g.strip() for g in g_list if g.strip()])   
-selected_genres = st.sidebar.multiselect("Require Genres:", sorted(list(all_genres)))
-st.sidebar.header("Advanced Filters")
-# 1. Metacritic评分范围
-if 'metacritic_score' in df.columns and df['metacritic_score'].max() > 0:
-    min_metacritic, max_metacritic = st.sidebar.slider(
-        "Metacritic Score",
-        int(df['metacritic_score'].min()),
-        int(df['metacritic_score'].max()),
-        (int(df['metacritic_score'].min()), int(df['metacritic_score'].max()))
-    )
-else:
-    min_metacritic, max_metacritic = 0, 100
-# 2. 发行年份范围
-if 'release_year' in df.columns:
-    min_year_val = int(df['release_year'].min()) if df['release_year'].min() > 0 else 2000
-    max_year_val = int(df['release_year'].max())
-    min_year, max_year = st.sidebar.slider(
-        "Release Year",
-        min_year_val,
-        max_year_val,
-        (min_year_val, max_year_val)
-    )
-else:
-    min_year, max_year = 2000, 2025
-# 3. 分类（Categories）多选
-all_categories = set()
-for c_list in df['categories'].str.split(','):
-    if type(c_list) is list:
-        all_categories.update([c.strip() for c in c_list if c.strip()])
-generic_categories = {'Single-player', 'Family Sharing', 'Steam Achievements', 'Steam Cloud', 'Profile Features Limited'}
-meaningful_categories = sorted([c for c in all_categories if c and c not in generic_categories])
-selected_categories = st.sidebar.multiselect("Include Categories:", meaningful_categories)
-# 4. 仅显示免费游戏
-free_games_only = st.sidebar.checkbox("Free Games Only", value=False)
+with st.sidebar.container():
+    st.sidebar.markdown('<div id="tutorial-target-genre_multiselect"></div>', unsafe_allow_html=True)
+    selected_genres = st.sidebar.multiselect("Require Genres:", sorted(list(all_genres)))
+
+with st.sidebar.container():
+    st.sidebar.markdown('<div id="tutorial-target-advanced_filters"></div>', unsafe_allow_html=True)
+    st.sidebar.header("Advanced Filters")
+    # 1. Metacritic评分范围
+    if 'metacritic_score' in df.columns and df['metacritic_score'].max() > 0:
+        min_metacritic, max_metacritic = st.sidebar.slider(
+            "Metacritic Score",
+            int(df['metacritic_score'].min()),
+            int(df['metacritic_score'].max()),
+            (int(df['metacritic_score'].min()), int(df['metacritic_score'].max()))
+        )
+    else:
+        min_metacritic, max_metacritic = 0, 100
+    # 2. 发行年份范围
+    if 'release_year' in df.columns:
+        min_year_val = int(df['release_year'].min()) if df['release_year'].min() > 0 else 2000
+        max_year_val = int(df['release_year'].max())
+        min_year, max_year = st.sidebar.slider(
+            "Release Year",
+            min_year_val,
+            max_year_val,
+            (min_year_val, max_year_val)
+        )
+    else:
+        min_year, max_year = 2000, 2025
+    # 3. 分类（Categories）多选
+    all_categories = set()
+    for c_list in df['categories'].str.split(','):
+        if type(c_list) is list:
+            all_categories.update([c.strip() for c in c_list if c.strip()])
+    generic_categories = {'Single-player', 'Family Sharing', 'Steam Achievements', 'Steam Cloud', 'Profile Features Limited'}
+    meaningful_categories = sorted([c for c in all_categories if c and c not in generic_categories])
+    selected_categories = st.sidebar.multiselect("Include Categories:", meaningful_categories)
+    # 4. 仅显示免费游戏
+    free_games_only = st.sidebar.checkbox("Free Games Only", value=False)
 def normalize_genre_tokens(genre_text):
     if genre_text is None:
         return set()
@@ -209,6 +451,7 @@ tab1, tab2, tab3, tab4 = st.tabs(["🔍 Semantic Search", "😲 Surprise Me (Cro
 
 # TAB 1: SEMANTIC SEARCH
 with tab1:
+    st.markdown('<div id="tutorial-target-search_tab"></div>', unsafe_allow_html=True)
     st.header("Search for Games")
     
     col1, col2 = st.columns(2)
@@ -227,6 +470,7 @@ with tab1:
     
     c_left, c_right = st.columns(2)
     with c_left:
+        st.markdown('<div id="tutorial-target-retrieval_controls"></div>', unsafe_allow_html=True)
         algo = st.radio("Retrieval Algorithm", ["From-Scratch (Custom Math)", "Scikit-Learn (NearestNeighbors)"])
     with c_right:
         sort_by = st.selectbox("Sort Matches By:", ["Match Score (Default)", "Total Positive Reviews", "Estimated Owners", "Price (Low to High)"])
@@ -304,6 +548,7 @@ with tab1:
 
 # TAB 2: SURPRISE ME (CROSS-GENRE)
 with tab2:
+    st.markdown('<div id="tutorial-target-surprise_tab"></div>', unsafe_allow_html=True)
     st.header("Surprise Me (Cross-Genre Explorer)")
     col1, col2 = st.columns(2)
     with col1:
@@ -341,6 +586,7 @@ with tab2:
 
 # TAB 3: DATA & VISUALS
 with tab3:
+    st.markdown('<div id="tutorial-target-visuals_tab"></div>', unsafe_allow_html=True)
     st.header("Visual Data Exploration")
     
     # 2D Map Colored by Cluster
@@ -396,6 +642,7 @@ with tab3:
 
 # TAB 4: EVAL & METRICS
 with tab4:
+    st.markdown('<div id="tutorial-target-eval_metrics_tab"></div>', unsafe_allow_html=True)
     st.header("Algorithm Evaluation Suite")
     st.markdown("Run quantitative tests to evaluate the mathematical quality of the embedding space and clustering.")
     
