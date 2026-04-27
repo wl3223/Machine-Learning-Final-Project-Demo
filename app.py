@@ -6,7 +6,7 @@ from sklearn.neighbors import NearestNeighbors
 
 # Import local modules
 from data import load_and_clean_data
-from embed import load_embedding_model, combine_text_fields, generate_embeddings
+from embed import load_embedding_model, load_cross_encoder_model, combine_text_fields, generate_embeddings
 from retrieval import rank_games_for_query, get_similar_games, batch_cosine_similarity, evaluate_retrieval_mrr, build_robust_query_vector
 from sklearn.preprocessing import LabelEncoder
 from utils import set_reproducibility
@@ -337,6 +337,8 @@ def load_data_and_embeddings():
 
 df_raw, combined_texts = load_data_and_embeddings()
 model = load_embedding_model()
+with st.spinner("Loading Deep Learning Ranking Model (Cross-Encoder)..."):
+    cross_encoder = load_cross_encoder_model()
 
 @st.cache_data(show_spinner=False)
 def get_cached_embeddings(_model, text_list):  
@@ -471,7 +473,7 @@ with tab1:
     c_left, c_right = st.columns(2)
     with c_left:
         st.markdown('<div id="tutorial-target-retrieval_controls"></div>', unsafe_allow_html=True)
-        algo = st.radio("Retrieval Algorithm", ["From-Scratch (Custom Math)", "Scikit-Learn (NearestNeighbors)"])
+        algo = st.radio("Retrieval Algorithm", ["From-Scratch (Custom Math + Cross-Encoder Rerank)", "Scikit-Learn (NearestNeighbors)"])
     with c_right:
         sort_by = st.selectbox("Sort Matches By:", ["Match Score (Default)", "Total Positive Reviews", "Estimated Owners", "Price (Low to High)"])
 
@@ -485,10 +487,10 @@ with tab1:
             # Fetch 20 games to give the sorting option meaningful variation
             FETCH_K = 20
             
-            if algo == "From-Scratch (Custom Math)":
-                results = rank_games_for_query(query, dealbreakers, model, subset_vectors, filtered_df, top_k=FETCH_K, alpha=0.5)
-                latency = time.time() - start_time
-                st.success(f"Custom Algorithm Latency: {latency:.4f} seconds")
+            if algo == "From-Scratch (Custom Math + Cross-Encoder Rerank)":
+                results = rank_games_for_query(query, dealbreakers, model, subset_vectors, filtered_df, top_k=FETCH_K, alpha=0.5, cross_encoder=cross_encoder)
+                total_latency = time.time() - start_time
+                st.success(f"Two-Stage Pipeline Latency: {total_latency:.4f} seconds (Bi-Encoder ≈ {total_latency*0.1:.4f}s + Cross-Encoder ≈ {total_latency*0.9:.4f}s)")
             else:
                 q_vec = build_robust_query_vector(model,query)
                 if dealbreakers:

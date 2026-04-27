@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, CrossEncoder
 import streamlit as st
 import os
 
@@ -11,6 +11,13 @@ def load_embedding_model(model_name='all-MiniLM-L6-v2'):
     'all-MiniLM-L6-v2' is chosen for a fast, high-quality MVP.
     """
     return SentenceTransformer(model_name)
+
+@st.cache_resource
+def load_cross_encoder_model(model_name='cross-encoder/ms-marco-MiniLM-L-6-v2'):
+    """
+    Loads and caches the CrossEncoder model for precision NLP reranking.
+    """
+    return CrossEncoder(model_name)
 
 
 def combine_text_fields(df, field_weights=None):

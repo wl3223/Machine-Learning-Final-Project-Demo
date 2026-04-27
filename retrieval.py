@@ -108,21 +108,23 @@ def batch_cosine_similarity(query_vector, dataset_vectors):
     # Dot product of 2D dataset with 1D query -> 1D array of similarities
     return np.dot(d_norm, q_norm)
 
-def rank_games_for_query(query_string, negative_query_string, model, dataset_vectors, df, top_k=10, alpha=0.5):
+def rank_games_for_query(query_string, negative_query_string, model, dataset_vectors, df, top_k=10, alpha=0.5, cross_encoder=None):
     """
     Ranks games based on a positive query, optionally shifting away from a negative query.
+    Optionally applies a Cross-Encoder to rerank the top candidate pool for maximum precision.
     
     Args:
         query_string (str): Primary search intent.
         negative_query_string (str): Dealbreakers intent.
-        model (SentenceTransformer): The text embedding model.
+        model (SentenceTransformer): The bi-encoder text embedding model.
         dataset_vectors (np.ndarray): (N, D) matrix of pre-computed game embeddings.
         df (pd.DataFrame): Dataset dataframe for returning results.
         top_k (int): Number of top matches to return.
         alpha (float): Weight for subtracting the negative vector.
+        cross_encoder (CrossEncoder): Optional cross-encoder model for stage-2 reranking.
         
     Returns:
-        pd.DataFrame: Top matching games containing their data and 'similarity_score'.
+        pd.DataFrame: Top matching games containing their data and scores.
     """
     # 1. Embed query with lightweight semantic expansion for vague input
     q_vec = build_robust_query_vector(model, query_string)
@@ -136,12 +138,24 @@ def rank_games_for_query(query_string, negative_query_string, model, dataset_vec
     similarities = batch_cosine_similarity(q_vec, dataset_vectors)
     
     # 4. Sort distances and return top_k index list
-    # Unpack np.argsort indexing descending
-    top_indices = np.argsort(similarities)[::-1][:top_k]
+    # Unpack np.argsort indexing descending. Fetch a larger pool if utilizing cross-encoder.
+    fetch_k = top_k * 3 if cross_encoder is not None else top_k
+    top_indices = np.argsort(similarities)[::-1][:fetch_k]
     
     # 5. Prep output dataframe
     results = df.iloc[top_indices].copy()
     results['similarity_score'] = similarities[top_indices]
+    
+    # 6. Apply Cross-Encoder Reranking if enabled
+    if cross_encoder is not None:
+        pairs = []
+        for _, row in results.iterrows():
+            doc_text = f"{row.get('name', '')}: {row.get('short_description', '')}"
+            pairs.append([str(query_string), str(doc_text)])
+        
+        ce_scores = cross_encoder.predict(pairs)
+        results['cross_encoder_score'] = ce_scores
+        results = results.sort_values(by='cross_encoder_score', ascending=False).head(top_k)
     
     return results
 
