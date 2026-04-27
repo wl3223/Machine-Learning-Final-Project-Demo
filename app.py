@@ -736,14 +736,23 @@ with tab1:
             for idx, row in results.iterrows():
                 with st.container():
                     c1, c2 = st.columns([1, 4])
-                    score = row['similarity_score']
+                    
+                    # Formatting logic for multiple scores
+                    if 'cross_encoder_score' in row:
+                        ce_score = row['cross_encoder_score']
+                        base_score = row['similarity_score']
+                        score_text = f"`(Final DL Confidence: {ce_score:.2f} | Base Geometry RRF: {base_score:.3f})`"
+                    else:
+                        score = row['similarity_score']
+                        score_text = f"`(Match Score: {score:.2f})`"
+                        
                     if 'header_image' in row and row['header_image']:
                         try:
                             c1.image(row['header_image'])
                         except:
                             c1.write("🖼️")
                     
-                    c2.subheader(f"{row['name']} `(Match: {score:.2f})`")
+                    c2.subheader(f"{row['name']} {score_text}")
                     c2.markdown(f"**Genres:** {row['genres']} | **Price:** ${row['price']} | **Cluster:** {row['Cluster']}")
                     c2.write(row['short_description'])
                     

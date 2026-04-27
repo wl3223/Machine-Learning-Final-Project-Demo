@@ -188,9 +188,8 @@ def rank_games_for_query(query_string, negative_query_string, model, dataset_vec
         # Apply Sigmoid function to normalize mathematically to continuous [0.0, 1.0] probability
         ce_scores = 1 / (1 + np.exp(-raw_logits))
         
-        # Overwrite the similarity score so the UI naturally picks up the final stage precision
+        # Save cross-encoder precision separately without destroying the original Stage-1 scores
         results['cross_encoder_score'] = ce_scores
-        results['similarity_score'] = ce_scores
         results = results.sort_values(by='cross_encoder_score', ascending=False).head(top_k)
     
     return results
