@@ -1,7 +1,9 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import time
 import pandas as pd
 import numpy as np
+import json
 from sklearn.neighbors import NearestNeighbors
 
 # Import local modules
@@ -109,56 +111,97 @@ TUTORIAL_STEPS = [
         "description": "Use this slider to set the price range for games you want to see. The filter updates results in real-time.",
         "target": "price_slider",
         "position": "right",
-        "focus_box": "left: 0.75rem; top: 3.1rem; width: 16.2rem; height: 4.8rem; border-radius: 10px;",
+        "dynamic_focus": {
+            "mode": "controls_union",
+            "labels": ["Price Range"],
+            "padding": 8,
+            "radius": 10,
+        },
     },
     {
         "title": "Genre Filter",
         "description": "Select specific genres to narrow down games. You can choose multiple genres at once. Specified genres will be prioritized and listed first in results.",
         "target": "genre_multiselect",
         "position": "right",
-        "focus_box": "left: 0.75rem; top: 9.5rem; width: 16.2rem; height: 5.2rem; border-radius: 10px;",
+        "dynamic_focus": {
+            "mode": "controls_union",
+            "labels": ["Require Genres:"],
+            "padding": 8,
+            "radius": 10,
+        },
     },
     {
         "title": "Advanced Filters",
         "description": "Fine-tune your search with Metacritic Score (online critical rating), Release Year, and Free Games Only options. The Include Categories dropdown also provides technical specifications (Commentary Available, Full Controller Support, etc.) to consider when providing matches.",
         "target": "advanced_filters",
         "position": "right",
-        "focus_box": "left: 0.75rem; top: 14.8rem; width: 16.2rem; height: 21.0rem; border-radius: 10px;",
+        "dynamic_focus": {
+            "mode": "controls_union",
+            "labels": ["Advanced Filters", "Metacritic Score", "Release Year", "Include Categories:", "Free Games Only"],
+            "padding": 8,
+            "radius": 10,
+        },
     },
     {
         "title": "Semantic Search Tab",
         "description": "Describe the game you want to play in natural language. Add dealbreakers to exclude unwanted features. The algorithm will subtract your dealbreakers from your main query to find the best games for you.",
         "target": "search_tab",
         "position": "bottom",
-        "focus_box": "left: 19.2rem; top: 26.0rem; right: 1.2rem; height: 15.4rem; border-radius: 10px;",
+        "dynamic_focus": {
+            "mode": "controls_union",
+            "labels": ["Describe the game you want to play:", "Dealbreakers (what you DON'T want):"],
+            "padding": 10,
+            "radius": 10,
+        },
     },
     {
         "title": "Retrieval Controls",
         "description": "Use the Retrieval Algorithm and Sort Matches By controls to change how games are ranked and displayed. Changing the Retrieval Algorithm may produce different results as matches are calculated differently. Sorting by Total Positive Reviews or Estimated Owners will prioritize more popular games, while sorting by Price will show cheaper options first.",
         "target": "retrieval_controls",
         "position": "bottom",
-        "focus_box": "left: 19.2rem; top: 42.0rem; right: 1.2rem; height: 15.4rem; border-radius: 10px;",
+        "dynamic_focus": {
+            "mode": "controls_union",
+            "labels": ["Retrieval Algorithm", "Sort Matches By:"],
+            "padding": 8,
+            "radius": 10,
+            "trim": {"left": 10, "right": 10, "top": 4, "bottom": 6},
+        },
     },
     {
         "title": "Surprise Me Tab",
         "description": "Blend two different game concepts and find games in between. Great for discovering unique matches. We will try to find the games that have the best of both worlds.",
         "target": "surprise_tab",
         "position": "bottom",
-        "focus_box": "left: 30.8rem; top: 22.9rem; width: 12.8rem; height: 2.2rem; border-radius: 999px;",
+        "dynamic_focus": {
+            "mode": "tab_label",
+            "tab_text": "Surprise Me",
+            "padding": 6,
+            "radius": 999,
+        },
     },
     {
         "title": "Data & Visuals Tab",
         "description": "See how we group games to gather insights and results. Explore 2D semantic maps, price distributions, and genre popularity charts to see the statistics behind your favorite games. We provide explanations for our mapping.",
         "target": "visuals_tab",
         "position": "bottom",
-        "focus_box": "left: 43.0rem; top: 22.9rem; width: 9.3rem; height: 2.2rem; border-radius: 999px;",
+        "dynamic_focus": {
+            "mode": "tab_label",
+            "tab_text": "Data & Visuals",
+            "padding": 6,
+            "radius": 999,
+        },
     },
     {
         "title": "Evaluation & Metrics",
         "description": "Review clustering quality and retrieval performance in the evaluation tab. You can mathematical decisions behind this app and see how we evaluate the quality of our clusters and retrieval algorithms. You can choose to run the Algorithm Evaluation Suite to see how different algorithms perform on our dataset.",
         "target": "eval_metrics_tab",
         "position": "bottom",
-        "focus_box": "left: 50.2rem; top: 22.9rem; width: 9.3rem; height: 2.2rem; border-radius: 999px;",
+        "dynamic_focus": {
+            "mode": "tab_label",
+            "tab_text": "Eval & Metrics",
+            "padding": 6,
+            "radius": 999,
+        },
     },
     {
         "title": "Ready to Explore!",
@@ -177,6 +220,142 @@ def get_card_position(position_type):
     }
     return positions.get(position_type, positions["center"])
 
+def render_dynamic_focus_box(dynamic_focus):
+    payload = json.dumps(dynamic_focus) if dynamic_focus else "null"
+    components.html(
+        f"""
+        <script>
+        (function() {{
+            const doc = window.parent.document;
+            const cfg = {payload};
+            const BOX_ID = 'tutorial-dynamic-focus-box';
+
+            function ensureBox() {{
+                let box = doc.getElementById(BOX_ID);
+                if (!box) {{
+                    box = doc.createElement('div');
+                    box.id = BOX_ID;
+                    box.style.position = 'fixed';
+                    box.style.border = '2px solid rgba(102, 192, 244, 0.95)';
+                    box.style.boxShadow = '0 0 0 6px rgba(102, 192, 244, 0.18), 0 0 18px rgba(102, 192, 244, 0.55)';
+                    box.style.zIndex = '2147483640';
+                    box.style.pointerEvents = 'none';
+                    doc.body.appendChild(box);
+                }}
+                return box;
+            }}
+
+            function hideBox() {{
+                const box = doc.getElementById(BOX_ID);
+                if (box) {{
+                    box.style.display = 'none';
+                }}
+            }}
+
+            function unionRects(rects) {{
+                if (!rects.length) return null;
+                let left = rects[0].left;
+                let top = rects[0].top;
+                let right = rects[0].right;
+                let bottom = rects[0].bottom;
+                for (const r of rects.slice(1)) {{
+                    left = Math.min(left, r.left);
+                    top = Math.min(top, r.top);
+                    right = Math.max(right, r.right);
+                    bottom = Math.max(bottom, r.bottom);
+                }}
+                return {{ left, top, right, bottom }};
+            }}
+
+            function findTabRect(tabText) {{
+                const tabs = Array.from(doc.querySelectorAll('[data-baseweb="tab"]'));
+                const hit = tabs.find((tab) => (tab.innerText || '').trim().includes(tabText));
+                return hit ? hit.getBoundingClientRect() : null;
+            }}
+
+            function findControlRectByLabel(labelText) {{
+                const normalize = (value) =>
+                    (value || '')
+                        .toLowerCase()
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                const wanted = normalize(labelText);
+                const labels = Array.from(doc.querySelectorAll('label, p, span'));
+                const hit = labels.find((el) => {{
+                    const txt = normalize(el.textContent || '');
+                    if (!txt || txt.length > 120) return false;
+                    return txt === wanted || txt.includes(wanted);
+                }});
+                if (!hit) return null;
+                const container =
+                    hit.closest('div[data-testid="stRadio"]') ||
+                    hit.closest('div[data-testid="stSelectbox"]') ||
+                    hit.closest('div[data-testid="stTextArea"]') ||
+                    hit.closest('div[data-testid="stTextInput"]') ||
+                    hit.closest('div[data-testid="stMultiSelect"]') ||
+                    hit.closest('div[data-testid="stSlider"]') ||
+                    hit.closest('div[data-testid="stCheckbox"]') ||
+                    hit.closest('div[data-testid="stElementContainer"]') ||
+                    hit.closest('div[data-testid="stVerticalBlock"]') ||
+                    hit.parentElement;
+                return container ? container.getBoundingClientRect() : hit.getBoundingClientRect();
+            }}
+
+            function computeRect() {{
+                if (!cfg) return null;
+                if (cfg.mode === 'tab_label') {{
+                    return findTabRect(cfg.tab_text);
+                }}
+                if (cfg.mode === 'controls_union' && Array.isArray(cfg.labels)) {{
+                    const rects = cfg.labels
+                        .map(findControlRectByLabel)
+                        .filter(Boolean);
+                    return unionRects(rects);
+                }}
+                return null;
+            }}
+
+            function update() {{
+                if (!cfg) {{
+                    hideBox();
+                    return;
+                }}
+                const rect = computeRect();
+                if (!rect) {{
+                    hideBox();
+                    return;
+                }}
+                const box = ensureBox();
+                const pad = Number(cfg.padding || 8);
+                const radius = Number(cfg.radius || 10);
+                const trim = cfg.trim || {{}};
+                const trimLeft = Number(trim.left || 0);
+                const trimRight = Number(trim.right || 0);
+                const trimTop = Number(trim.top || 0);
+                const trimBottom = Number(trim.bottom || 0);
+                box.style.display = 'block';
+                const computedLeft = rect.left - pad + trimLeft;
+                const computedTop = rect.top - pad + trimTop;
+                const computedWidth = Math.max(10, (rect.right - rect.left + pad * 2 - trimLeft - trimRight));
+                const computedHeight = Math.max(10, (rect.bottom - rect.top + pad * 2 - trimTop - trimBottom));
+                box.style.left = computedLeft + 'px';
+                box.style.top = computedTop + 'px';
+                box.style.width = computedWidth + 'px';
+                box.style.height = computedHeight + 'px';
+                box.style.borderRadius = radius + 'px';
+            }}
+
+            update();
+            setTimeout(update, 120);
+            setTimeout(update, 350);
+            setTimeout(update, 700);
+        }})();
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+
 def render_tutorial_overlay():
     """Render tutorial overlay with card and step controls."""
     if "tutorial_step" not in st.session_state:
@@ -190,7 +369,8 @@ def render_tutorial_overlay():
     total_steps = len(TUTORIAL_STEPS)
     card_position = get_card_position(step.get("position", "center"))
     progress_percent = (step_num / total_steps) * 100
-    focus_box_style = step.get("focus_box")
+    dynamic_focus = step.get("dynamic_focus")
+    focus_box_style = step.get("focus_box") if not dynamic_focus else None
     focus_box_css = ""
     if focus_box_style:
         focus_box_css = f"""
@@ -291,6 +471,7 @@ def render_tutorial_overlay():
     <div class="tutorial-backdrop"></div>
     """
     st.markdown(overlay_css, unsafe_allow_html=True)
+    render_dynamic_focus_box(dynamic_focus)
 
     with st.container():
         st.markdown("<div id='tutorial-card-marker'></div>", unsafe_allow_html=True)
