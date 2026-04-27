@@ -53,30 +53,33 @@
                               |                   | Dealbreaker Embedding |
                               |                   |      (Negative)       |
                               v                   +-----------+-----------+
-                 +--------------------------------------------+-----------+
-                 |          Vector Mathematics (Subtraction)              |
-                 |      Query_Vec = Pos_Vec  -  (\alpha * Neg_Vec)        |
-                 +----------------------------+---------------------------+
-                                              |
-                                              v
-                              +-------------------------------+
-                              |    Batch Cosine Similarity    |  <-- Computes dot product
-                              |       (From-scratch)          |      with entire Vector Search Matrix
-                              |  Sim = Query_Vec @ Data_Vec.T |      
-                              +---------------+---------------+
-                                              |               
-                                              v                     
-                              +-------------------------------+
-                              | Numpy Argsort & Top-K Ranking |  <-- Stage 1: Top-60 Candidate Pool
-                              +---------------+---------------+
-                                              |
-                                              v
-                              +-------------------------------+
-                              |    Cross-Encoder Reranker     |  <-- Stage 2: Precision scoring Query
-                              |      (ms-marco-MiniLM)        |      vs Candidate Descriptions
-                              +---------------+---------------+
-                                              |
-                                              v
+                               +--------------------------------------------+
+                               |          Vector Mathematics (Subtraction)  | 
+                               +----------------------------+---------------+
+                                                            |
+                     +--------------------------------------+-------------------------------------+
+                     |                                                                            |
+                     v                                                                            v
++------------------------------------------+                                 +------------------------------------------+
+|       Batch Cosine Similarity            |  <-- Stage 1: Dense Semantic    |      TF-IDF Keyword Matrix Vector        | <-- Stage 1: Sparse Exact
+|           (From-scratch)                 |      (Understands Vibe/Meaning) |            (Dot Product)                 |     Keyword Matching
+|      Sim = Query_Vec @ Data_Vec.T        |                                 |                                          |
++--------------------+---------------------+                                 +--------------------+---------------------+
+                     |                                                                            |
+                     +--------------------------------------+-------------------------------------+
+                                                            |
+                                                            v
+                                            +-----------------------------------+
+                                            |    Reciprocal Rank Fusion (RRF)   | <-- Computes mathematically unifying   
+                                            |  1/(60+Dense) + 1/(60+Sparse)     |     score. Outputs Top-60 Candidates.
+                                            +---------------+-------------------+
+                                                            |                     
+                                            +-----------------------------------+
+                                            |     Cross-Encoder Reranker        | <-- Stage 2: Precision DL Scoring Query
+                                            |        (ms-marco-MiniLM)          |     vs Candidate Descriptions
+                                            +---------------+-------------------+
+                                                            |
+                                                            v
                                [ Ranked Top-20 Game Results ]
 ```
 
@@ -97,8 +100,11 @@ This gives us two main outputs: First, our from-scratch **K-Means++ engine** cal
 The online phase is where the magic happens when a user types a query. Let's say a user searches for 'a relaxing farming sim'. Instead of just matching exact keywords, we pass this through an **Intelligent Query Builder** which mathematically expands vague terms—knowing that 'relaxing' is related to 'cozy' and 'calm'.
 
 **[Explain the Vector Subtraction / Dealbreaker part]**
-But what if they *never* want to see turn-based games? If they add a dealbreaker, we embed that dealbreaker as a negative vector. Using vector mathematics, we take the search vector and subtract the dealbreaker vector. It literally pushes the query away from games with turn-based mechanics in the geometric space.
+But what if they *never* want to see turn-based games? If they add a dealbreaker, we embed that dealbreaker as a negative vector. Using vector mathematics, we subtract the dealbreaker vector from the search vector. It literally pushes the query away from games with turn-based mechanics in the geometric space.
 
-Finally, we run our from-scratch **Batch Cosine Similarity** function. By calculating the dot product of our query vector against the entire dataset matrix using NumPy, we can instantly grab a broad pool of the Top 60 candidate games. 
+Finally, we run our **Ultimate Three-Stage Retrieval Pipeline**. 
+First, we run two searches simultaneously: A From-scratch **Batch Cosine Similarity** finds the top games that match the semantic 'vibe', while a **TF-IDF Sparse Matrix** dot product finds games that precisely match exact keywords. 
 
-But we don't stop there. To guarantee absolute precision, we pass these 60 games into our **Two-Stage Cross-Encoder Reranker** model. The Cross-Encoder evaluates the deep semantic interaction between the user's exact query strings and each candidate's text description word-by-word, aggressively re-sorting them to output the true closest matches."
+We mathematically unify these two different models using **Reciprocal Rank Fusion (RRF)**. RRF ignores absolute scores and only looks at relative rankings, mathematically guaranteeing our top 60 candidate pool has both perfect meaning and exact keyword hits. 
+
+But we don't stop there. To guarantee absolute precision, we pass these 60 games into our final **Cross-Encoder Reranker** model. The Cross-Encoder evaluates deep semantic interaction between the user's explicit query and each candidate's local text, aggressively re-sorting them into pure [0 to 1] probability percentages as the true closest matches."
