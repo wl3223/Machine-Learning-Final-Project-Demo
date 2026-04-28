@@ -6,6 +6,7 @@ import numpy as np
 import json
 from sklearn.neighbors import NearestNeighbors
 
+from data import load_and_clean_data
 from embed import load_embedding_model, load_cross_encoder_model, load_tfidf_model_and_matrix, combine_text_fields, generate_embeddings
 from retrieval import rank_games_for_query, get_similar_games, batch_cosine_similarity, evaluate_retrieval_mrr, evaluate_ultimate_pipeline, build_robust_query_vector
 from sklearn.preprocessing import LabelEncoder
@@ -222,17 +223,26 @@ def get_card_position(position_type):
 
 def render_dynamic_focus_box(dynamic_focus):
     payload = json.dumps(dynamic_focus) if dynamic_focus else "null"
-    components.html(
-        f"""
+    script = """
         <script>
-        (function() {{
+        (function() {
             const doc = window.parent.document;
-            const cfg = {payload};
+            const root = window.parent;
+            const cfg = __PAYLOAD__;
             const BOX_ID = 'tutorial-dynamic-focus-box';
+            const STATE_KEY = '__tutorialFocusState';
+            const CLEANUP_KEY = '__tutorialFocusCleanup';
 
-            function ensureBox() {{
+            const existingCleanup = root[CLEANUP_KEY];
+            if (typeof existingCleanup === 'function') {
+                try { existingCleanup(); } catch (err) {}
+            }
+
+            const state = root[STATE_KEY] || (root[STATE_KEY] = { rafId: null, observer: null });
+
+            function ensureBox() {
                 let box = doc.getElementById(BOX_ID);
-                if (!box) {{
+                if (!box) {
                     box = doc.createElement('div');
                     box.id = BOX_ID;
                     box.style.position = 'fixed';
@@ -241,39 +251,46 @@ def render_dynamic_focus_box(dynamic_focus):
                     box.style.zIndex = '2147483640';
                     box.style.pointerEvents = 'none';
                     doc.body.appendChild(box);
-                }}
+                }
                 return box;
-            }}
+            }
 
-            function hideBox() {{
+            function destroyBox() {
                 const box = doc.getElementById(BOX_ID);
-                if (box) {{
-                    box.style.display = 'none';
-                }}
-            }}
+                if (box && box.parentNode) {
+                    box.parentNode.removeChild(box);
+                }
+            }
 
-            function unionRects(rects) {{
+            function hideBox() {
+                const box = doc.getElementById(BOX_ID);
+                if (box) {
+                    box.style.display = 'none';
+                }
+            }
+
+            function unionRects(rects) {
                 if (!rects.length) return null;
                 let left = rects[0].left;
                 let top = rects[0].top;
                 let right = rects[0].right;
                 let bottom = rects[0].bottom;
-                for (const r of rects.slice(1)) {{
+                for (const r of rects.slice(1)) {
                     left = Math.min(left, r.left);
                     top = Math.min(top, r.top);
                     right = Math.max(right, r.right);
                     bottom = Math.max(bottom, r.bottom);
-                }}
-                return {{ left, top, right, bottom }};
-            }}
+                }
+                return { left, top, right, bottom };
+            }
 
-            function findTabRect(tabText) {{
+            function findTabRect(tabText) {
                 const tabs = Array.from(doc.querySelectorAll('[data-baseweb="tab"]'));
                 const hit = tabs.find((tab) => (tab.innerText || '').trim().includes(tabText));
                 return hit ? hit.getBoundingClientRect() : null;
-            }}
+            }
 
-            function findControlRectByLabel(labelText) {{
+            function findControlRectByLabel(labelText) {
                 const normalize = (value) =>
                     (value || '')
                         .toLowerCase()
@@ -281,11 +298,11 @@ def render_dynamic_focus_box(dynamic_focus):
                         .trim();
                 const wanted = normalize(labelText);
                 const labels = Array.from(doc.querySelectorAll('label, p, span'));
-                const hit = labels.find((el) => {{
+                const hit = labels.find((el) => {
                     const txt = normalize(el.textContent || '');
                     if (!txt || txt.length > 120) return false;
                     return txt === wanted || txt.includes(wanted);
-                }});
+                });
                 if (!hit) return null;
                 const container =
                     hit.closest('div[data-testid="stRadio"]') ||
@@ -299,36 +316,36 @@ def render_dynamic_focus_box(dynamic_focus):
                     hit.closest('div[data-testid="stVerticalBlock"]') ||
                     hit.parentElement;
                 return container ? container.getBoundingClientRect() : hit.getBoundingClientRect();
-            }}
+            }
 
-            function computeRect() {{
+            function computeRect() {
                 if (!cfg) return null;
-                if (cfg.mode === 'tab_label') {{
+                if (cfg.mode === 'tab_label') {
                     return findTabRect(cfg.tab_text);
-                }}
-                if (cfg.mode === 'controls_union' && Array.isArray(cfg.labels)) {{
+                }
+                if (cfg.mode === 'controls_union' && Array.isArray(cfg.labels)) {
                     const rects = cfg.labels
                         .map(findControlRectByLabel)
                         .filter(Boolean);
                     return unionRects(rects);
-                }}
+                }
                 return null;
-            }}
+            }
 
-            function update() {{
-                if (!cfg) {{
+            function update() {
+                if (!cfg) {
                     hideBox();
                     return;
-                }}
+                }
                 const rect = computeRect();
-                if (!rect) {{
+                if (!rect) {
                     hideBox();
                     return;
-                }}
+                }
                 const box = ensureBox();
                 const pad = Number(cfg.padding || 8);
                 const radius = Number(cfg.radius || 10);
-                const trim = cfg.trim || {{}};
+                const trim = cfg.trim || {};
                 const trimLeft = Number(trim.left || 0);
                 const trimRight = Number(trim.right || 0);
                 const trimTop = Number(trim.top || 0);
@@ -343,15 +360,52 @@ def render_dynamic_focus_box(dynamic_focus):
                 box.style.width = computedWidth + 'px';
                 box.style.height = computedHeight + 'px';
                 box.style.borderRadius = radius + 'px';
-            }}
+            }
+
+            function scheduleUpdate() {
+                if (state.rafId) return;
+                state.rafId = root.requestAnimationFrame(() => {
+                    state.rafId = null;
+                    update();
+                });
+            }
+
+            function registerLiveUpdates() {
+                if (state.observer) return;
+                const observer = new root.MutationObserver(scheduleUpdate);
+                observer.observe(doc.body, { subtree: true, childList: true, attributes: true });
+                state.observer = observer;
+
+                root.addEventListener('scroll', scheduleUpdate, true);
+                root.addEventListener('resize', scheduleUpdate, true);
+
+                root[CLEANUP_KEY] = () => {
+                    root.removeEventListener('scroll', scheduleUpdate, true);
+                    root.removeEventListener('resize', scheduleUpdate, true);
+                    if (state.observer) {
+                        state.observer.disconnect();
+                        state.observer = null;
+                    }
+                    if (state.rafId) {
+                        root.cancelAnimationFrame(state.rafId);
+                        state.rafId = null;
+                    }
+                    destroyBox();
+                    root[CLEANUP_KEY] = null;
+                };
+            }
 
             update();
-            setTimeout(update, 120);
-            setTimeout(update, 350);
-            setTimeout(update, 700);
-        }})();
+            registerLiveUpdates();
+            setTimeout(scheduleUpdate, 120);
+            setTimeout(scheduleUpdate, 350);
+            setTimeout(scheduleUpdate, 700);
+        })();
         </script>
-        """,
+        """
+    script = script.replace('__PAYLOAD__', payload)
+    components.html(
+        script,
         height=0,
         width=0,
     )

@@ -142,19 +142,32 @@ def rank_games_for_query(query_string, negative_query_string, model, dataset_vec
     
     # 4. Determine base candidate pool sizes
     fetch_k = top_k * 3 if cross_encoder is not None else top_k
+
+    def safe_row_slice(matrix, indices):
+        """Slice a matrix by row indices when possible; otherwise fall back to the matrix as-is."""
+        if matrix is None or indices is None:
+            return matrix
+        try:
+            return matrix[indices]
+        except Exception:
+            return matrix
     
     # 5. Hybrid Search & Reciprocal Rank Fusion (RRF) Logic (Stage 1)
     if tfidf_vectorizer is not None and tfidf_matrix is not None and filtered_indices is not None and len(filtered_indices) > 0:
         fetch_k = min(fetch_k, len(filtered_indices))
+
+        # When the caller passes a filtered subset of vectors, dense similarities are aligned
+        # to that subset order, not the original dataframe indices.
+        candidate_positions = np.arange(len(filtered_indices)) if len(dense_similarities) == len(filtered_indices) else np.asarray(filtered_indices)
         
         # Calculate Dense Ranks
-        dense_sim_filtered = dense_similarities[filtered_indices]
+        dense_sim_filtered = dense_similarities[candidate_positions]
         dense_ranks = np.zeros_like(dense_sim_filtered, dtype=float)
         dense_ranks[np.argsort(dense_sim_filtered)[::-1]] = np.arange(len(dense_sim_filtered))
 
         # Calculate Sparse Scores & Ranks
         sparse_query_vec = tfidf_vectorizer.transform([str(query_string)])
-        sparse_matrix_filtered = tfidf_matrix[filtered_indices]
+        sparse_matrix_filtered = safe_row_slice(tfidf_matrix, filtered_indices)
         sparse_similarities = sparse_query_vec.dot(sparse_matrix_filtered.T).toarray()[0]
         
         sparse_ranks = np.zeros_like(sparse_similarities, dtype=float)
@@ -166,7 +179,7 @@ def rank_games_for_query(query_string, negative_query_string, model, dataset_vec
         best_local_indices = np.argsort(rrf_scores)[::-1][:fetch_k]
         top_indices = [filtered_indices[i] for i in best_local_indices]
         
-        results = df.iloc[top_indices].copy()
+        results = df.loc[top_indices].copy()
         results['similarity_score'] = rrf_scores[best_local_indices]
         
     else:
