@@ -12,6 +12,8 @@ from sklearn.preprocessing import LabelEncoder
 from utils import set_reproducibility
 from viz import perform_pca_projection, plot_2d_map, plot_price_distribution, plot_top_genres, plot_price_pie, plot_elbow_silhouette
 from clustering import perform_kmeans_clustering, compute_clustering_metrics, get_cluster_profiles, find_optimal_k
+from data import load_and_clean_data
+
 # Constants
 MVP_DATA_LIMIT = 10000
 RANDOM_SEED = 42
@@ -557,7 +559,7 @@ def benchmark_retrieval(_model, _dataset_vectors, _df, _cross_encoder, _tfidf_ve
     stats = evaluate_ultimate_pipeline(_model, _dataset_vectors, _df, _cross_encoder, _tfidf_vectorizer, _tfidf_matrix, sample_size=30, top_k=5)
     return stats, time.time() - start_r
 
-with st.spinner("Benchmarking Ultimate Architecture Quality (Takes 10-20s, saves to cache forever)..."):
+with st.spinner("Benchmarking Ultimate Architecture Quality (Takes 40-50s, saves to cache forever)..."):
     # Precalculate global benchmarks immediately
     inertia_k, sil_k, inertia_h, sil_h, time_c = benchmark_clustering(dataset_vectors, clusters, df)
     retrieval_stats, time_r = benchmark_retrieval(model, dataset_vectors, df, cross_encoder, tfidf_vectorizer, tfidf_matrix)
