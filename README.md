@@ -1,5 +1,10 @@
 # Steam Game Discovery: A Hybrid NLP and Vector Search Approach
 
+**Contributors:**
+- Weiyi Lu
+- Kylie Lin
+- Zipei He
+
 A Streamlit web application to discover Steam games through natural text search, dealbreakers, and advanced three-stage vector mapping. This application utilizes an industry-grade **Hybrid Retrieval Architecture**. It merges dense semantic vectors (`Sentence-Transformers`) with sparse keyword matrices (`TF-IDF`), unifies them mathematically using **Reciprocal Rank Fusion (RRF)**, and achieves optimal human-like precision by reranking candidates through a deep learning **Cross-Encoder**. It also includes robust UI filtering, global cache pre-loading, and zero-latency quantitative evaluation workflows.
 
 ## Data Source & Acknowledgements
